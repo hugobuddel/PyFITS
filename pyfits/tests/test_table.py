@@ -50,12 +50,13 @@ def comparefloats(a, b):
     diff = np.absolute(aa - bb)
     mask0 = aa == 0
     masknz = aa != 0.
-    if np.any(mask0):
-        if diff[mask0].max() != 0.:
-            return False
-    if np.any(masknz):
-        if (diff[masknz] / np.absolute(aa[masknz])).max() > precision:
-            return False
+    if np.any(mask0) and diff[mask0].max() != 0.0:
+        return False
+    if (
+        np.any(masknz)
+        and (diff[masknz] / np.absolute(aa[masknz])).max() > precision
+    ):
+        return False
     return True
 
 
@@ -100,12 +101,11 @@ def comparerecords(a, b):
                     print_('fielda[%d]: %s' % (row, fielda[row]))
                     print_('fieldb[%d]: %s' % (row, fieldb[row]))
                     print_('field %d differs in row %d' % (i, row))
-        else:
-            if np.any(fielda != fieldb):
-                print_("fielda: ", fielda)
-                print_("fieldb: ", fieldb)
-                print_('field %d differs' % i)
-                return False
+        elif np.any(fielda != fieldb):
+            print_("fielda: ", fielda)
+            print_("fieldb: ", fieldb)
+            print_('field %d differs' % i)
+            return False
     return True
 
 
@@ -831,11 +831,7 @@ class TestTableFunctions(PyfitsTestCase):
         well to other similar cases.
         """
 
-        NULLS = {}
-        NULLS['a'] = 2
-        NULLS['b'] = 'b'
-        NULLS['c'] = 2.3
-
+        NULLS = {'a': 2, 'b': 'b', 'c': 2.3}
         data = np.array(list(zip([1, 2, 3, 4],
                                  ['a', 'b', 'c', 'd'],
                                  [2.3, 4.5, 6.7, 8.9])),
@@ -950,10 +946,10 @@ class TestTableFunctions(PyfitsTestCase):
         t1 = fits.open(self.temp('table1.fits'))
 
         assert len(t1[1].data[0]) == 5
-        assert len(t1[1].data[0][0:4]) == 4
-        assert len(t1[1].data[0][0:5]) == 5
-        assert len(t1[1].data[0][0:6]) == 5
-        assert len(t1[1].data[0][0:7]) == 5
+        assert len(t1[1].data[0][:4]) == 4
+        assert len(t1[1].data[0][:5]) == 5
+        assert len(t1[1].data[0][:6]) == 5
+        assert len(t1[1].data[0][:7]) == 5
         assert len(t1[1].data[0][1:4]) == 3
         assert len(t1[1].data[0][1:5]) == 4
         assert len(t1[1].data[0][1:6]) == 4

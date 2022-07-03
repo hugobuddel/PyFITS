@@ -109,7 +109,7 @@ class ReleaseManager(object):
             # Only prepend the 'v' when making the release with Git;
             # historically this has *not* been used in the SVN tag names
             if not isinstance(self.vcs, Subversion):
-                v = 'v' + v
+                v = f'v{v}'
 
             # If the version is like 3.2, append a .0
             if v.count('.') == 1:
@@ -120,9 +120,8 @@ class ReleaseManager(object):
         # to use the -s option to create a signed tag and add the 'v' in front
         # of the version number
         def _my_create_tag(self, version):
-            msg = "Tagging %s" % (version,)
-            cmd = 'git tag -s %s -m "%s"' % (version, msg)
-            return cmd
+            msg = f"Tagging {version}"
+            return 'git tag -s %s -m "%s"' % (version, msg)
 
         # Similarly copied from zest.releaser to support use of 'v' in front
         # of the version number
@@ -142,8 +141,7 @@ class ReleaseManager(object):
                     print_(os.system(cmd))
                 else:
                     # all commands are needed in order to proceed normally
-                    print_("Please create a tag for %s yourself and rerun." %
-                           self.data['version'])
+                    print_(f"Please create a tag for {self.data['version']} yourself and rerun.")
                     sys.exit()
             if not self.vcs.tag_exists(tag_name):
                 print_("\nFailed to create tag %s!" % tag_name)
@@ -240,8 +238,8 @@ class ReleaseManager(object):
         def version_replace(match):
             repl = match.group('prefix') + new_version_str
             if match.group('date'):
-                today = datetime.today().strftime(DATE_FORMAT)
-                repl += ' (%s)' % today
+                today = datetime.now().strftime(DATE_FORMAT)
+                repl += f' ({today})'
             return repl
 
         # Go ahead and do the find/replace on supported subpages
@@ -467,22 +465,20 @@ def config_parser(filename, callback):
     updated = False
 
     for lineno, line in enumerate(config):
-        match = ConfigParser.SECTCRE.match(line)
-        if match:
+        if match := ConfigParser.SECTCRE.match(line):
             current_section = match.group('header')
             current_option = None
             section, option, value = current_section, None, None
+        elif re.match(r'^\s*#', line) or not line.strip():
+            section, option, value = None, None, None
+        elif re.match(r'^\s+', line):
+            # A new line in the current option
+            section, option, value = (current_section, current_option,
+                                      line.strip())
         else:
-            if re.match(r'^\s*#', line) or not line.strip():
-                section, option, value = None, None, None
-            elif re.match(r'^\s+', line):
-                # A new line in the current option
-                section, option, value = (current_section, current_option,
-                                          line.strip())
-            else:
-                option, value = (item.strip() for item in line.split('=', 1))
-                section = current_section
-                current_option = option
+            option, value = (item.strip() for item in line.split('=', 1))
+            section = current_section
+            current_option = option
         lines = callback(section, option, value, lineno, line)
         if lines != line:
             updated = True
@@ -504,9 +500,8 @@ class _ZopeProxy(object):
     def __init__(self, url, username=None, password=None):
         if username and password:
             protocol, rest = url.split('://', 1)
-            self.url = '%s://%s:%s@%s' % (protocol, username, password, rest)
-            self.masked_url = '%s://%s:%s@%s' % (protocol, username, '*' * 8,
-                                                 rest)
+            self.url = f'{protocol}://{username}:{password}@{rest}'
+            self.masked_url = f"{protocol}://{username}:{'*' * 8}@{rest}"
         else:
             self.url = self.masked_url = url
 
@@ -523,8 +518,7 @@ class _ZopeProxy(object):
             exc_type, exc, tb = sys.exc_info()
             if log:
                 message = str(exc).replace(self.url, self.masked_url)
-                log.error('Failed to connect to %s: %s' %
-                          (self.masked_url, message))
+                log.error(f'Failed to connect to {self.masked_url}: {message}')
             reraise(exc_type, exc, tb)
 
     def retrieve(self):
@@ -532,15 +526,14 @@ class _ZopeProxy(object):
 
         self.connect()
         if log:
-            log.info('Retrieving %s...' % self.masked_url)
+            log.info(f'Retrieving {self.masked_url}...')
         try:
             return self.proxy.document_src()
         except:
             exc_type, exc, tb = sys.exc_info()
             if log:
                 message = str(exc).replace(self.url, self.masked_url)
-                log.error('Failed to download content at %s: %s' %
-                          (self.masked_url, message))
+                log.error(f'Failed to download content at {self.masked_url}: {message}')
             reraise(exc_type, exc, tb)
 
     def update(self, content, title=None):
@@ -548,7 +541,7 @@ class _ZopeProxy(object):
 
         self.connect()
         if log:
-            log.info('Updating %s...' % self.masked_url)
+            log.info(f'Updating {self.masked_url}...')
         try:
             if title is None:
                 title = self.proxy.title_or_id()
@@ -557,8 +550,7 @@ class _ZopeProxy(object):
             exc_type, exc, tb = sys.exc_info()
             if log:
                 message = str(exc).replace(self.url, self.masked_url)
-                log.error('Failed to update content at %s: %s' %
-                          (self.masked_url, message))
+                log.error(f'Failed to update content at {self.masked_url}: {message}')
             reraise(exc_type, exc, tb)
 
 

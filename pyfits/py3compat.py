@@ -71,10 +71,7 @@ if six.PY3:
                 val = numpy.ndarray.__getitem__(self, obj)
                 if isinstance(val, numpy.character):
                     temp = val.rstrip()
-                    if numpy.char._len(temp) == 0:
-                        val = ''
-                    else:
-                        val = temp
+                    val = '' if numpy.char._len(temp) == 0 else temp
                 return val
 
         for m in [numpy, numpy.char, numpy.core.defchararray,
@@ -91,17 +88,13 @@ if six.PY3:
     from pyfits.util import isreadable as _isreadable
 
     def isreadable(f):
-        if hasattr(f, 'readable'):
-            return f.readable()
-        return _isreadable(f)
+        return f.readable() if hasattr(f, 'readable') else _isreadable(f)
     pyfits.util.isreadable = isreadable
 
     from pyfits.util import iswritable as _iswritable
 
     def iswritable(f):
-        if hasattr(f, 'writable'):
-            return f.writable()
-        return _iswritable(f)
+        return f.writable() if hasattr(f, 'writable') else _iswritable(f)
     pyfits.util.iswritable = iswritable
 
     # isfile needs to support the higher-level wrappers around FileIO

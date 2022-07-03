@@ -66,10 +66,7 @@ class FitsHDU(NonstandardExtHDU):
 
         fileobj = bs = BytesIO()
         if compress:
-            if hasattr(hdulist, '_file'):
-                name = fileobj_name(hdulist._file)
-            else:
-                name = None
+            name = fileobj_name(hdulist._file) if hasattr(hdulist, '_file') else None
             fileobj = gzip.GzipFile(name, mode='wb', fileobj=bs)
 
         hdulist.writeto(fileobj)
@@ -96,9 +93,14 @@ class FitsHDU(NonstandardExtHDU):
         # Add the XINDn keywords proposed by Perry, though nothing is done with
         # these at the moment
         if len(hdulist) > 1:
-            for idx, hdu in enumerate(hdulist[1:]):
-                cards.append(('XIND' + str(idx + 1), hdu._header_offset,
-                              'byte offset of extension %d' % (idx + 1)))
+            cards.extend(
+                (
+                    f'XIND{str(idx + 1)}',
+                    hdu._header_offset,
+                    'byte offset of extension %d' % (idx + 1),
+                )
+                for idx, hdu in enumerate(hdulist[1:])
+            )
 
         cards.append(('COMPRESS',  compress, 'Uses gzip compression'))
         header = Header(cards)

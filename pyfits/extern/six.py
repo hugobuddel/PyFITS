@@ -143,10 +143,7 @@ class MovedAttribute(_LazyDescr):
                 new_mod = name
             self.mod = new_mod
             if new_attr is None:
-                if old_attr is None:
-                    new_attr = name
-                else:
-                    new_attr = old_attr
+                new_attr = name if old_attr is None else old_attr
             self.attr = new_attr
         else:
             self.mod = old_mod
@@ -162,12 +159,12 @@ class MovedAttribute(_LazyDescr):
 
 class _MovedItems(_LazyModule):
     """Lazy loading of moved objects"""
-
-
 _moved_attributes = [
     MovedAttribute("cStringIO", "cStringIO", "io", "StringIO"),
     MovedAttribute("filter", "itertools", "builtins", "ifilter", "filter"),
-    MovedAttribute("filterfalse", "itertools", "itertools", "ifilterfalse", "filterfalse"),
+    MovedAttribute(
+        "filterfalse", "itertools", "itertools", "ifilterfalse", "filterfalse"
+    ),
     MovedAttribute("input", "__builtin__", "builtins", "raw_input", "input"),
     MovedAttribute("map", "itertools", "builtins", "imap", "map"),
     MovedAttribute("range", "__builtin__", "builtins", "xrange", "range"),
@@ -177,8 +174,9 @@ _moved_attributes = [
     MovedAttribute("UserString", "UserString", "collections"),
     MovedAttribute("xrange", "__builtin__", "builtins", "xrange", "range"),
     MovedAttribute("zip", "itertools", "builtins", "izip", "zip"),
-    MovedAttribute("zip_longest", "itertools", "itertools", "izip_longest", "zip_longest"),
-
+    MovedAttribute(
+        "zip_longest", "itertools", "itertools", "izip_longest", "zip_longest"
+    ),
     MovedModule("builtins", "__builtin__"),
     MovedModule("configparser", "ConfigParser"),
     MovedModule("copyreg", "copy_reg"),
@@ -188,7 +186,9 @@ _moved_attributes = [
     MovedModule("html_entities", "htmlentitydefs", "html.entities"),
     MovedModule("html_parser", "HTMLParser", "html.parser"),
     MovedModule("http_client", "httplib", "http.client"),
-    MovedModule("email_mime_multipart", "email.MIMEMultipart", "email.mime.multipart"),
+    MovedModule(
+        "email_mime_multipart", "email.MIMEMultipart", "email.mime.multipart"
+    ),
     MovedModule("email_mime_text", "email.MIMEText", "email.mime.text"),
     MovedModule("email_mime_base", "email.MIMEBase", "email.mime.base"),
     MovedModule("BaseHTTPServer", "BaseHTTPServer", "http.server"),
@@ -202,43 +202,55 @@ _moved_attributes = [
     MovedModule("tkinter", "Tkinter"),
     MovedModule("tkinter_dialog", "Dialog", "tkinter.dialog"),
     MovedModule("tkinter_filedialog", "FileDialog", "tkinter.filedialog"),
-    MovedModule("tkinter_scrolledtext", "ScrolledText", "tkinter.scrolledtext"),
-    MovedModule("tkinter_simpledialog", "SimpleDialog", "tkinter.simpledialog"),
+    MovedModule(
+        "tkinter_scrolledtext", "ScrolledText", "tkinter.scrolledtext"
+    ),
+    MovedModule(
+        "tkinter_simpledialog", "SimpleDialog", "tkinter.simpledialog"
+    ),
     MovedModule("tkinter_tix", "Tix", "tkinter.tix"),
     MovedModule("tkinter_ttk", "ttk", "tkinter.ttk"),
     MovedModule("tkinter_constants", "Tkconstants", "tkinter.constants"),
     MovedModule("tkinter_dnd", "Tkdnd", "tkinter.dnd"),
-    MovedModule("tkinter_colorchooser", "tkColorChooser",
-                "tkinter.colorchooser"),
-    MovedModule("tkinter_commondialog", "tkCommonDialog",
-                "tkinter.commondialog"),
+    MovedModule(
+        "tkinter_colorchooser", "tkColorChooser", "tkinter.colorchooser"
+    ),
+    MovedModule(
+        "tkinter_commondialog", "tkCommonDialog", "tkinter.commondialog"
+    ),
     MovedModule("tkinter_tkfiledialog", "tkFileDialog", "tkinter.filedialog"),
     MovedModule("tkinter_font", "tkFont", "tkinter.font"),
     MovedModule("tkinter_messagebox", "tkMessageBox", "tkinter.messagebox"),
-    MovedModule("tkinter_tksimpledialog", "tkSimpleDialog",
-                "tkinter.simpledialog"),
-    MovedModule("urllib_parse", __name__ + ".moves.urllib_parse", "urllib.parse"),
-    MovedModule("urllib_error", __name__ + ".moves.urllib_error", "urllib.error"),
-    MovedModule("urllib", __name__ + ".moves.urllib", __name__ + ".moves.urllib"),
+    MovedModule(
+        "tkinter_tksimpledialog", "tkSimpleDialog", "tkinter.simpledialog"
+    ),
+    MovedModule(
+        "urllib_parse", f"{__name__}.moves.urllib_parse", "urllib.parse"
+    ),
+    MovedModule(
+        "urllib_error", f"{__name__}.moves.urllib_error", "urllib.error"
+    ),
+    MovedModule(
+        "urllib", f"{__name__}.moves.urllib", f"{__name__}.moves.urllib"
+    ),
     MovedModule("urllib_robotparser", "robotparser", "urllib.robotparser"),
     MovedModule("xmlrpc_client", "xmlrpclib", "xmlrpc.client"),
     MovedModule("winreg", "_winreg"),
 ]
+
 for attr in _moved_attributes:
     setattr(_MovedItems, attr.name, attr)
     if isinstance(attr, MovedModule):
-        sys.modules[__name__ + ".moves." + attr.name] = attr
+        sys.modules[f"{__name__}.moves.{attr.name}"] = attr
 del attr
 
 _MovedItems._moved_attributes = _moved_attributes
 
-moves = sys.modules[__name__ + ".moves"] = _MovedItems(__name__ + ".moves")
+moves = sys.modules[f"{__name__}.moves"] = _MovedItems(f"{__name__}.moves")
 
 
 class Module_six_moves_urllib_parse(_LazyModule):
     """Lazy loading of moved objects in six.moves.urllib_parse"""
-
-
 _urllib_parse_moved_attributes = [
     MovedAttribute("ParseResult", "urlparse", "urllib.parse"),
     MovedAttribute("parse_qs", "urlparse", "urllib.parse"),
@@ -261,13 +273,14 @@ del attr
 
 Module_six_moves_urllib_parse._moved_attributes = _urllib_parse_moved_attributes
 
-sys.modules[__name__ + ".moves.urllib_parse"] = sys.modules[__name__ + ".moves.urllib.parse"] = Module_six_moves_urllib_parse(__name__ + ".moves.urllib_parse")
+sys.modules[f"{__name__}.moves.urllib_parse"] = sys.modules[
+    f"{__name__}.moves.urllib.parse"
+] = Module_six_moves_urllib_parse(f"{__name__}.moves.urllib_parse")
+
 
 
 class Module_six_moves_urllib_error(_LazyModule):
     """Lazy loading of moved objects in six.moves.urllib_error"""
-
-
 _urllib_error_moved_attributes = [
     MovedAttribute("URLError", "urllib2", "urllib.error"),
     MovedAttribute("HTTPError", "urllib2", "urllib.error"),
@@ -279,13 +292,14 @@ del attr
 
 Module_six_moves_urllib_error._moved_attributes = _urllib_error_moved_attributes
 
-sys.modules[__name__ + ".moves.urllib_error"] = sys.modules[__name__ + ".moves.urllib.error"] = Module_six_moves_urllib_error(__name__ + ".moves.urllib.error")
+sys.modules[f"{__name__}.moves.urllib_error"] = sys.modules[
+    f"{__name__}.moves.urllib.error"
+] = Module_six_moves_urllib_error(f"{__name__}.moves.urllib.error")
+
 
 
 class Module_six_moves_urllib_request(_LazyModule):
     """Lazy loading of moved objects in six.moves.urllib_request"""
-
-
 _urllib_request_moved_attributes = [
     MovedAttribute("urlopen", "urllib2", "urllib.request"),
     MovedAttribute("install_opener", "urllib2", "urllib.request"),
@@ -327,13 +341,14 @@ del attr
 
 Module_six_moves_urllib_request._moved_attributes = _urllib_request_moved_attributes
 
-sys.modules[__name__ + ".moves.urllib_request"] = sys.modules[__name__ + ".moves.urllib.request"] = Module_six_moves_urllib_request(__name__ + ".moves.urllib.request")
+sys.modules[f"{__name__}.moves.urllib_request"] = sys.modules[
+    f"{__name__}.moves.urllib.request"
+] = Module_six_moves_urllib_request(f"{__name__}.moves.urllib.request")
+
 
 
 class Module_six_moves_urllib_response(_LazyModule):
     """Lazy loading of moved objects in six.moves.urllib_response"""
-
-
 _urllib_response_moved_attributes = [
     MovedAttribute("addbase", "urllib", "urllib.response"),
     MovedAttribute("addclosehook", "urllib", "urllib.response"),
@@ -346,13 +361,14 @@ del attr
 
 Module_six_moves_urllib_response._moved_attributes = _urllib_response_moved_attributes
 
-sys.modules[__name__ + ".moves.urllib_response"] = sys.modules[__name__ + ".moves.urllib.response"] = Module_six_moves_urllib_response(__name__ + ".moves.urllib.response")
+sys.modules[f"{__name__}.moves.urllib_response"] = sys.modules[
+    f"{__name__}.moves.urllib.response"
+] = Module_six_moves_urllib_response(f"{__name__}.moves.urllib.response")
+
 
 
 class Module_six_moves_urllib_robotparser(_LazyModule):
     """Lazy loading of moved objects in six.moves.urllib_robotparser"""
-
-
 _urllib_robotparser_moved_attributes = [
     MovedAttribute("RobotFileParser", "robotparser", "urllib.robotparser"),
 ]
@@ -362,7 +378,9 @@ del attr
 
 Module_six_moves_urllib_robotparser._moved_attributes = _urllib_robotparser_moved_attributes
 
-sys.modules[__name__ + ".moves.urllib_robotparser"] = sys.modules[__name__ + ".moves.urllib.robotparser"] = Module_six_moves_urllib_robotparser(__name__ + ".moves.urllib.robotparser")
+sys.modules[f"{__name__}.moves.urllib_robotparser"] = sys.modules[
+    f"{__name__}.moves.urllib.robotparser"
+] = Module_six_moves_urllib_robotparser(f"{__name__}.moves.urllib.robotparser")
 
 
 class Module_six_moves_urllib(types.ModuleType):
@@ -377,7 +395,9 @@ class Module_six_moves_urllib(types.ModuleType):
         return ['parse', 'error', 'request', 'response', 'robotparser']
 
 
-sys.modules[__name__ + ".moves.urllib"] = Module_six_moves_urllib(__name__ + ".moves.urllib")
+sys.modules[f"{__name__}.moves.urllib"] = Module_six_moves_urllib(
+    f"{__name__}.moves.urllib"
+)
 
 
 def add_move(move):

@@ -177,19 +177,21 @@ class WeakSet(object):
     __lt__ = issubset
 
     def __le__(self, other):
-        return self.data <= set(ref(item) for item in other)
+        return self.data <= {ref(item) for item in other}
 
     def issuperset(self, other):
         return self.data.issuperset(ref(item) for item in other)
     __gt__ = issuperset
 
     def __ge__(self, other):
-        return self.data >= set(ref(item) for item in other)
+        return self.data >= {ref(item) for item in other}
 
     def __eq__(self, other):
-        if not isinstance(other, self.__class__):
-            return NotImplemented
-        return self.data == set(ref(item) for item in other)
+        return (
+            self.data == {ref(item) for item in other}
+            if isinstance(other, self.__class__)
+            else NotImplemented
+        )
 
     def symmetric_difference(self, other):
         return self._apply(other, self.data.symmetric_difference)

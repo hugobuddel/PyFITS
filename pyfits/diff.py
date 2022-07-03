@@ -109,11 +109,7 @@ class _BaseDiff(object):
 
         args, _, _, _ = getargspec(cls.__init__)
         # The first 3 arguments of any Diff initializer are self, a, and b.
-        kwargs = {}
-        for arg in args[3:]:
-            if hasattr(other, arg):
-                kwargs[arg] = getattr(other, arg)
-
+        kwargs = {arg: getattr(other, arg) for arg in args[3:] if hasattr(other, arg)}
         return cls(a, b, **kwargs)
 
     @property
@@ -163,9 +159,8 @@ class _BaseDiff(object):
             if os.path.exists(fileobj) and not clobber:
                 raise IOError("File {0} exists, aborting (pass in "
                               "clobber=True to overwrite)".format(fileobj))
-            else:
-                filepath = fileobj
-                fileobj = open(filepath, 'w')
+            filepath = fileobj
+            fileobj = open(filepath, 'w')
         elif fileobj is None:
             fileobj = StringIO()
             return_string = True
@@ -259,8 +254,10 @@ class FITSDiff(_BaseDiff):
                 a = fitsopen(a)
             except Exception:
                 excls, exc = sys.exc_info()[:2]
-                raise IOError("error opening file a (%s): %s: %s" %
-                              (a, exc.__class__.__name__, exc.args[0]))
+                raise IOError(
+                    f"error opening file a ({a}): {exc.__class__.__name__}: {exc.args[0]}"
+                )
+
             close_a = True
         else:
             close_a = False
@@ -270,16 +267,18 @@ class FITSDiff(_BaseDiff):
                 b = fitsopen(b)
             except Exception:
                 excls, exc = sys.exc_info()[:2]
-                raise IOError("error opening file b (%s): %s: %s" %
-                              (b, exc.__class__.__name__, exc.args[0]))
+                raise IOError(
+                    f"error opening file b ({b}): {exc.__class__.__name__}: {exc.args[0]}"
+                )
+
             close_b = True
         else:
             close_b = False
 
         # Normalize keywords/fields to ignore to upper case
-        self.ignore_keywords = set(k.upper() for k in ignore_keywords)
-        self.ignore_comments = set(k.upper() for k in ignore_comments)
-        self.ignore_fields = set(k.upper() for k in ignore_fields)
+        self.ignore_keywords = {k.upper() for k in ignore_keywords}
+        self.ignore_comments = {k.upper() for k in ignore_comments}
+        self.ignore_fields = {k.upper() for k in ignore_fields}
 
         self.numdiffs = numdiffs
         self.tolerance = tolerance
@@ -327,7 +326,7 @@ class FITSDiff(_BaseDiff):
                                                  id(self.b))
 
         self._fileobj.write('\n')
-        self._writeln(' fitsdiff: %s' % pyfits.__version__)
+        self._writeln(f' fitsdiff: {pyfits.__version__}')
         self._writeln(' a: %s\n b: %s' % (filenamea, filenameb))
         if self.ignore_keywords:
             ignore_keywords = ' '.join(sorted(self.ignore_keywords))
@@ -344,7 +343,7 @@ class FITSDiff(_BaseDiff):
                           wrapper.fill(ignore_fields))
         self._writeln(' Maximum number of different data values to be '
                       'reported: %s' % self.numdiffs)
-        self._writeln(' Data comparison level: %s' % self.tolerance)
+        self._writeln(f' Data comparison level: {self.tolerance}')
 
         if self.diff_hdu_count:
             self._fileobj.write('\n')
@@ -407,9 +406,9 @@ class HDUDiff(_BaseDiff):
         See `FITSDiff` for explanations of the initialization parameters.
         """
 
-        self.ignore_keywords = set(k.upper() for k in ignore_keywords)
-        self.ignore_comments = set(k.upper() for k in ignore_comments)
-        self.ignore_fields = set(k.upper() for k in ignore_fields)
+        self.ignore_keywords = {k.upper() for k in ignore_keywords}
+        self.ignore_comments = {k.upper() for k in ignore_comments}
+        self.ignore_fields = {k.upper() for k in ignore_fields}
 
         self.tolerance = tolerance
         self.numdiffs = numdiffs
@@ -535,8 +534,8 @@ class HeaderDiff(_BaseDiff):
         See `FITSDiff` for explanations of the initialization parameters.
         """
 
-        self.ignore_keywords = set(k.upper() for k in ignore_keywords)
-        self.ignore_comments = set(k.upper() for k in ignore_comments)
+        self.ignore_keywords = {k.upper() for k in ignore_keywords}
+        self.ignore_comments = {k.upper() for k in ignore_comments}
 
         self.tolerance = tolerance
         self.ignore_blanks = ignore_blanks
@@ -802,13 +801,20 @@ class ImageDataDiff(_BaseDiff):
 
         # Find the indices where the values are not equal
         # If neither a nor b are floating point, ignore self.tolerance
-        if not ((np.issubdtype(self.a.dtype, float) or
-                 np.issubdtype(self.a.dtype, complex)) or
-                (np.issubdtype(self.b.dtype, float) or
-                 np.issubdtype(self.b.dtype, complex))):
-            tolerance = 0
-        else:
-            tolerance = self.tolerance
+        tolerance = (
+            self.tolerance
+            if (
+                (
+                    np.issubdtype(self.a.dtype, float)
+                    or np.issubdtype(self.a.dtype, complex)
+                )
+                or (
+                    np.issubdtype(self.b.dtype, float)
+                    or np.issubdtype(self.b.dtype, complex)
+                )
+            )
+            else 0
+        )
 
         diffs = where_not_allclose(self.a, self.b, atol=0.0, rtol=tolerance)
 
@@ -818,11 +824,7 @@ class ImageDataDiff(_BaseDiff):
             # Then we're done
             return
 
-        if self.numdiffs < 0:
-            numdiffs = self.diff_total
-        else:
-            numdiffs = self.numdiffs
-
+        numdiffs = self.diff_total if self.numdiffs < 0 else self.numdiffs
         self.diff_pixels = [(idx, (self.a[idx], self.b[idx]))
                             for idx in islice(zip(*diffs), 0, numdiffs)]
         self.diff_ratio = float(self.diff_total) / float(len(self.a.flat))
@@ -834,8 +836,8 @@ class ImageDataDiff(_BaseDiff):
             dimsb = ' x '.join(str(d) for d in
                                reversed(self.diff_dimensions[1]))
             self._writeln(' Data dimensions differ:')
-            self._writeln('  a: %s' % dimsa)
-            self._writeln('  b: %s' % dimsb)
+            self._writeln(f'  a: {dimsa}')
+            self._writeln(f'  b: {dimsb}')
             # For now we don't do any further comparison if the dimensions
             # differ; though in the future it might be nice to be able to
             # compare at least where the images intersect
@@ -847,7 +849,7 @@ class ImageDataDiff(_BaseDiff):
 
         for index, values in self.diff_pixels:
             index = [x + 1 for x in reversed(index)]
-            self._writeln(' Data differs at %s:' % index)
+            self._writeln(f' Data differs at {index}:')
             report_diff_values(self._fileobj, values[0], values[1],
                                ind=self._indent + 1)
 
@@ -1014,8 +1016,8 @@ class TableDataDiff(_BaseDiff):
 
         # Even if the number of columns are unequal, we still do comparison of
         # any common columns
-        colsa = dict((c.name.lower(), c) for c in colsa)
-        colsb = dict((c.name.lower(), c) for c in colsb)
+        colsa = {c.name.lower(): c for c in colsa}
+        colsb = {c.name.lower(): c for c in colsb}
 
         if '*' in self.ignore_fields:
             # If all columns are to be ignored, ignore any further differences
@@ -1024,7 +1026,7 @@ class TableDataDiff(_BaseDiff):
 
         # Keep the user's original ignore_fields list for reporting purposes,
         # but internally use a case-insensitive version
-        ignore_fields = set([f.lower() for f in self.ignore_fields])
+        ignore_fields = {f.lower() for f in self.ignore_fields}
 
         # It might be nice if there were a cleaner way to do this, but for now
         # it'll do
@@ -1040,13 +1042,16 @@ class TableDataDiff(_BaseDiff):
         self.common_columns = sorted(colsa_set.intersection(colsb_set),
                                      key=lambda c: c.name)
 
-        self.common_column_names = set([col.name.lower()
-                                        for col in self.common_columns])
+        self.common_column_names = {col.name.lower() for col in self.common_columns}
 
-        left_only_columns = dict((col.name.lower(), col)
-                                 for col in colsa_set.difference(colsb_set))
-        right_only_columns = dict((col.name.lower(), col)
-                                  for col in colsb_set.difference(colsa_set))
+        left_only_columns = {
+            col.name.lower(): col for col in colsa_set.difference(colsb_set)
+        }
+
+        right_only_columns = {
+            col.name.lower(): col for col in colsb_set.difference(colsa_set)
+        }
+
 
         if left_only_columns or right_only_columns:
             self.diff_columns = (left_only_columns, right_only_columns)
@@ -1135,8 +1140,12 @@ class TableDataDiff(_BaseDiff):
                     # interested in storing row-by-row differences
                     continue
                 last_seen_idx = idx
-                self.diff_values.append(((col.name, idx),
-                                         (arra[idx], arrb[idx])))
+                self.diff_values.append(
+                    (
+                        (col.name, last_seen_idx),
+                        (arra[last_seen_idx], arrb[last_seen_idx]),
+                    )
+                )
 
         total_values = len(self.a) * len(self.a.dtype.fields)
         self.diff_ratio = float(self.diff_total) / float(total_values)

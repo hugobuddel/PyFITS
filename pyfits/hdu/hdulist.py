@@ -119,7 +119,7 @@ def fitsopen(name, mode='readonly', memmap=None, save_backup=False, **kwargs):
         kwargs['uint'] = ENABLE_UINT
 
     if not name:
-        raise ValueError('Empty filename: %s' % repr(name))
+        raise ValueError(f'Empty filename: {repr(name)}')
 
     return HDUList.fromfile(name, mode, memmap, save_backup, **kwargs)
 
@@ -202,16 +202,14 @@ class HDUList(list, _Verify):
                 raise ValueError('An element in the HDUList must be an HDU.')
             for item in hdu:
                 if not isinstance(item, _BaseHDU):
-                    raise ValueError('%s is not an HDU.' % item)
-        else:
-            if not isinstance(hdu, _BaseHDU):
-                raise ValueError('%s is not an HDU.' % hdu)
+                    raise ValueError(f'{item} is not an HDU.')
+        elif not isinstance(hdu, _BaseHDU):
+            raise ValueError(f'{hdu} is not an HDU.')
 
         try:
             super(HDUList, self).__setitem__(_key, hdu)
         except IndexError:
-            raise IndexError('Extension %s is out of bound or not found.'
-                             % key)
+            raise IndexError(f'Extension {key} is out of bound or not found.')
         self._resize = True
         self._truncate = False
 
@@ -345,9 +343,7 @@ class HDUList(list, _Verify):
                 f = None
 
                 for hdu in self:
-                    info = hdu.fileinfo()
-
-                    if info:
+                    if info := hdu.fileinfo():
                         f = info['file']
                         fm = info['filemode']
                         break
@@ -376,7 +372,7 @@ class HDUList(list, _Verify):
         """
 
         if not isinstance(hdu, _BaseHDU):
-            raise ValueError('%s is not an HDU.' % hdu)
+            raise ValueError(f'{hdu} is not an HDU.')
 
         num_hdus = len(self)
 
@@ -451,20 +447,19 @@ class HDUList(list, _Verify):
                 # TODO: This isn't necessarily sufficient to copy the HDU;
                 # _header_offset and friends need to be copied too.
                 hdu = ImageHDU(hdu.data, hdu.header)
-        else:
-            if not isinstance(hdu, (PrimaryHDU, _NonstandardHDU)):
-                # You passed in an Extension HDU but we need a Primary
-                # HDU.
-                # If you provided an ImageHDU then we can convert it to
-                # a primary HDU and use that.
-                if isinstance(hdu, ImageHDU):
-                    hdu = PrimaryHDU(hdu.data, hdu.header)
-                else:
-                    # You didn't provide an ImageHDU so we create a
-                    # simple Primary HDU and append that first before
-                    # we append the new Extension HDU.
-                    phdu = PrimaryHDU()
-                    super(HDUList, self).append(phdu)
+        elif not isinstance(hdu, (PrimaryHDU, _NonstandardHDU)):
+            # You passed in an Extension HDU but we need a Primary
+            # HDU.
+            # If you provided an ImageHDU then we can convert it to
+            # a primary HDU and use that.
+            if isinstance(hdu, ImageHDU):
+                hdu = PrimaryHDU(hdu.data, hdu.header)
+            else:
+                # You didn't provide an ImageHDU so we create a
+                # simple Primary HDU and append that first before
+                # we append the new Extension HDU.
+                phdu = PrimaryHDU()
+                super(HDUList, self).append(phdu)
 
         super(HDUList, self).append(hdu)
         hdu._new = True
@@ -516,7 +511,7 @@ class HDUList(list, _Verify):
                 nfound += 1
 
         if (nfound == 0):
-            raise KeyError('Extension %s not found.' % repr(key))
+            raise KeyError(f'Extension {repr(key)} not found.')
         elif (nfound > 1):
             raise KeyError('There are %d extensions of %s.'
                            % (nfound, repr(key)))
@@ -561,13 +556,12 @@ class HDUList(list, _Verify):
             if os.path.exists(filename):
                 # The the file doesn't actually exist anymore for some reason
                 # then there's no point in trying to make a backup
-                backup = filename + '.bak'
+                backup = f'{filename}.bak'
                 idx = 1
                 while os.path.exists(backup):
-                    backup = filename + '.bak.' + str(idx)
+                    backup = f'{filename}.bak.{str(idx)}'
                     idx += 1
-                warnings.warn('Saving a backup of %s to %s.' %
-                              (filename, backup))
+                warnings.warn(f'Saving a backup of {filename} to {backup}.')
                 try:
                     shutil.copy(filename, backup)
                 except IOError as exc:
@@ -621,7 +615,7 @@ class HDUList(list, _Verify):
                 hdr.set('EXTEND', True, after='NAXIS')
             else:
                 n = hdr['NAXIS']
-                hdr.set('EXTEND', True, after='NAXIS' + str(n))
+                hdr.set('EXTEND', True, after=f'NAXIS{str(n)}')
 
     def writeto(self, fileobj, output_verify='exception', clobber=False,
                 checksum=False):
@@ -733,8 +727,11 @@ class HDUList(list, _Verify):
         else:
             name = self._file.name
 
-        results = ['Filename: %s' % name,
-                   'No.    Name         Type      Cards   Dimensions   Format']
+        results = [
+            f'Filename: {name}',
+            'No.    Name         Type      Cards   Dimensions   Format',
+        ]
+
 
         format = '%-3d  %-10s  %-11s  %5d   %-10s   %s   %s'
         default = ('', '', 0, (), '', '')
@@ -748,12 +745,11 @@ class HDUList(list, _Verify):
             else:
                 results.append(summary)
 
-        if output:
-            output.write('\n'.join(results))
-            output.write('\n')
-            output.flush()
-        else:
+        if not output:
             return results[2:]
+        output.write('\n'.join(results))
+        output.write('\n')
+        output.flush()
 
     def filename(self):
         """
@@ -766,9 +762,8 @@ class HDUList(list, _Verify):
                    HDUList object if an association exists.  Otherwise returns
                    None.
         """
-        if self._file is not None:
-            if hasattr(self._file, 'name'):
-                return self._file.name
+        if self._file is not None and hasattr(self._file, 'name'):
+            return self._file.name
         return None
 
     @classmethod
@@ -781,11 +776,12 @@ class HDUList(list, _Verify):
         """
 
         if fileobj is not None:
-            if not isinstance(fileobj, _File):
-                # instantiate a FITS file object (ffo)
-                ffo = _File(fileobj, mode=mode, memmap=memmap)
-            else:
-                ffo = fileobj
+            ffo = (
+                fileobj
+                if isinstance(fileobj, _File)
+                else _File(fileobj, mode=mode, memmap=memmap)
+            )
+
             # The pyfits mode is determined by the _File initializer if the
             # supplied mode was None
             mode = ffo.mode
@@ -888,10 +884,7 @@ class HDUList(list, _Verify):
 
             def fix(header=self[0].header):
                 naxis = header['NAXIS']
-                if naxis == 0:
-                    after = 'NAXIS'
-                else:
-                    after = 'NAXIS' + str(naxis)
+                after = 'NAXIS' if naxis == 0 else f'NAXIS{str(naxis)}'
                 header.set('EXTEND', value=True, after=after)
 
             errs.append(self.run_option(option, err_text=err_text,

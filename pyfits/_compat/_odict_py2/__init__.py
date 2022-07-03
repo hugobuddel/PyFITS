@@ -160,9 +160,11 @@ class OrderedDict(dict, MutableMapping):
     @_recursive_repr
     def __repr__(self):
         'od.__repr__() <==> repr(od)'
-        if not self:
-            return '%s()' % (self.__class__.__name__,)
-        return '%s(%r)' % (self.__class__.__name__, self.items())
+        return (
+            '%s(%r)' % (self.__class__.__name__, self.items())
+            if self
+            else f'{self.__class__.__name__}()'
+        )
 
     def copy(self):
         'od.copy() -> a shallow copy of od'

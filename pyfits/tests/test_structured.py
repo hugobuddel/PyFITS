@@ -24,10 +24,10 @@ def compare_arrays(arr1in, arr2in, verbose=False):
         n1 = n2
         if n1 not in arr1.dtype.names:
             n1 = n1.lower()
-            if n1 not in arr1.dtype.names:
-                n1 = n1.upper()
-                if n1 not in arr1.dtype.names:
-                    raise ValueError('field name %s not found in array 1' % n2)
+        if n1 not in arr1.dtype.names:
+            n1 = n1.upper()
+        if n1 not in arr1.dtype.names:
+            raise ValueError(f'field name {n2} not found in array 1')
 
         if verbose:
             sys.stdout.write("    testing field: '%s'\n" % n2)
@@ -47,9 +47,8 @@ def compare_arrays(arr1in, arr2in, verbose=False):
                     sys.stdout.write(
                         '\n        %s elements in field %s differ\n' %
                         (w.size, n2))
-            else:
-                if verbose:
-                    sys.stdout.write('OK\n')
+            elif verbose:
+                sys.stdout.write('OK\n')
 
     if nfail == 0:
         if verbose:

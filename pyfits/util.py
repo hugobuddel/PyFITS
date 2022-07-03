@@ -220,8 +220,7 @@ def itersubclasses(cls, _seen=None):
         if sub not in _seen:
             _seen.add(sub)
             yield sub
-            for sub in itersubclasses(sub, _seen):
-                yield sub
+            yield from itersubclasses(sub, _seen)
 
 
 class lazyproperty(object):
@@ -236,10 +235,7 @@ class lazyproperty(object):
         self._fget = fget
         self._fset = fset
         self._fdel = fdel
-        if doc is None:
-            self.__doc__ = fget.__doc__
-        else:
-            self.__doc__ = doc
+        self.__doc__ = fget.__doc__ if doc is None else doc
         self._key = self._fget.__name__
 
     def __get__(self, obj, owner=None):
@@ -705,7 +701,7 @@ def isreadable(f):
     if not hasattr(f, 'read'):
         return False
 
-    if hasattr(f, 'mode') and not any((c in f.mode for c in 'r+')):
+    if hasattr(f, 'mode') and all(c not in f.mode for c in 'r+'):
         return False
 
     # Not closed, has a 'read()' method, and either has no known mode or a
@@ -726,7 +722,7 @@ def iswritable(f):
     if not hasattr(f, 'write'):
         return False
 
-    if hasattr(f, 'mode') and not any((c in f.mode for c in 'wa+')):
+    if hasattr(f, 'mode') and all(c not in f.mode for c in 'wa+'):
         return False
 
     # Note closed, has a 'write()' method, and either has no known mode or a
@@ -988,11 +984,7 @@ def fileobj_is_binary(f):
     if io is not None and isinstance(f, io.TextIOBase):
         return False
 
-    mode = fileobj_mode(f)
-    if mode:
-        return 'b' in mode
-    else:
-        return True
+    return 'b' in mode if (mode := fileobj_mode(f)) else True
 
 
 def translate(s, table, deletechars):
@@ -1005,8 +997,8 @@ def translate(s, table, deletechars):
     if isinstance(s, str):
         return s.translate(table, deletechars)
     elif isinstance(s, text_type):
-        table = dict((x, ord(table[x])) for x in range(256)
-                     if ord(table[x]) != x)
+        table = {x: ord(table[x]) for x in range(256) if ord(table[x]) != x}
+
         for c in deletechars:
             table[ord(c)] = None
         return s.translate(table)
@@ -1053,23 +1045,20 @@ def _array_from_file(infile, dtype, count, sep):
 
         global CHUNKED_FROMFILE
         if CHUNKED_FROMFILE is None:
-            if sys.platform == 'darwin' and LooseVersion(platform.mac_ver()[0]) < LooseVersion('10.9'):
-                CHUNKED_FROMFILE = True
-            else:
-                CHUNKED_FROMFILE = False
+            CHUNKED_FROMFILE = sys.platform == 'darwin' and LooseVersion(
+                platform.mac_ver()[0]
+            ) < LooseVersion('10.9')
 
-        if CHUNKED_FROMFILE:
-            chunk_size = int(1024 ** 3 / dtype.itemsize)  # 1Gb to be safe
-            if count < chunk_size:
-                return np.fromfile(infile, dtype=dtype, count=count, sep=sep)
-            else:
-                array = np.empty(count, dtype=dtype)
-                for beg in range(0, count, chunk_size):
-                    end = min(count, beg + chunk_size)
-                    array[beg:end] = np.fromfile(infile, dtype=dtype, count=end - beg, sep=sep)
-                return array
-        else:
+        if not CHUNKED_FROMFILE:
             return np.fromfile(infile, dtype=dtype, count=count, sep=sep)
+        chunk_size = int(1024 ** 3 / dtype.itemsize)  # 1Gb to be safe
+        if count < chunk_size:
+            return np.fromfile(infile, dtype=dtype, count=count, sep=sep)
+        array = np.empty(count, dtype=dtype)
+        for beg in range(0, count, chunk_size):
+            end = min(count, beg + chunk_size)
+            array[beg:end] = np.fromfile(infile, dtype=dtype, count=end - beg, sep=sep)
+        return array
     else:
         # treat as file-like object with "read" method; this includes gzip file
         # objects, because numpy.fromfile just reads the compressed bytes from
@@ -1100,11 +1089,7 @@ def _array_to_file(arr, outfile):
     """
 
 
-    if isfile(outfile):
-        write = lambda a, f: a.tofile(f)
-    else:
-        write = _array_to_file_like
-
+    write = (lambda a, f: a.tofile(f)) if isfile(outfile) else _array_to_file_like
     # Implements a workaround for a bug deep in OSX's stdlib file writing
     # functions; on 64-bit OSX it is not possible to correctly write a number
     # of bytes greater than 2 ** 32 and divisible by 4096 (or possibly 8192--
@@ -1249,13 +1234,13 @@ def _words_group(input, strlen):
     words = []
     nblanks = input.count(' ')
     nmax = max(nblanks, len(input) // strlen + 1)
-    arr = np.fromstring((input + ' '), dtype=(binary_type, 1))
+    arr = np.fromstring(f'{input} ', dtype=(binary_type, 1))
 
     # locations of the blanks
     blank_loc = np.nonzero(arr == ' '.encode('latin1'))[0]
     offset = 0
     xoffset = 0
-    for idx in range(nmax):
+    for _ in range(nmax):
         try:
             loc = np.nonzero(blank_loc >= strlen + offset)[0][0]
             offset = blank_loc[loc - 1] + 1

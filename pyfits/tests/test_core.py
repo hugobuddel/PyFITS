@@ -137,7 +137,7 @@ class TestCore(PyfitsTestCase):
 
         header = fits.Header()
         comment = 'number of bits per data pixel'
-        card = fits.Card.fromstring('BITPIX  = 32 / %s' % comment)
+        card = fits.Card.fromstring(f'BITPIX  = 32 / {comment}')
         header.append(card)
 
         header['BITPIX'] = 32
@@ -564,9 +564,6 @@ class TestFileFunctions(PyfitsTestCase):
             fits.open(self.temp('foobar.fits'))
         except IOError as exc:
             assert 'No such file or directory' in str(exc)
-        except:
-            raise
-
         # But opening in ostream or append mode should be okay, since they
         # allow writing new files
         for mode in ('ostream', 'append'):
