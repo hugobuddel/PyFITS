@@ -360,8 +360,7 @@ class Card(_Verify):
                 try:
                     self._value = _int_or_float(self._value)
                 except ValueError:
-                    raise ValueError('value %s is not a float' %
-                                     self._value)
+                    raise ValueError(f'value {self._value} is not a float')
 
     @value.deleter
     def value(self):
@@ -401,7 +400,7 @@ class Card(_Verify):
         if self._rawvalue is not None:
             return self._rawvalue
         elif self.field_specifier is not None:
-            self._rawvalue = '%s: %s' % (self.field_specifier, self.value)
+            self._rawvalue = f'{self.field_specifier}: {self.value}'
             return self._rawvalue
         else:
             return self.value
@@ -463,10 +462,7 @@ class Card(_Verify):
 
         # Ensure that the keyword exists and has been parsed--the will set the
         # internal _field_specifier attribute if this is a RVKC.
-        if self.keyword:
-            return self._field_specifier
-        else:
-            return None
+        return self._field_specifier if self.keyword else None
 
     @field_specifier.setter
     def field_specifier(self, field_specifier):
@@ -511,17 +507,15 @@ class Card(_Verify):
         Returns `False` otherwise.
         """
 
-        if not self._verified:
-            # The card image has not been parsed yet; compare directly with the
-            # string representation of a blank card
-            return self._image == BLANK_CARD
-
-        # If the keyword, value, and comment are all empty (for self.value
-        # explicitly check that it is a string value, since a blank value is
-        # returned as '')
-        return (not self.keyword and
-                (isinstance(self.value, string_types) and not self.value) and
-                not self.comment)
+        return (
+            (
+                not self.keyword
+                and (isinstance(self.value, string_types) and not self.value)
+                and not self.comment
+            )
+            if self._verified
+            else self._image == BLANK_CARD
+        )
 
     @classmethod
     def fromstring(cls, image):
@@ -556,10 +550,7 @@ class Card(_Verify):
                 cls._keywd_FSC_RE.match(keyword)):
             return keyword
 
-        # Test if this is a record-valued keyword
-        match = cls._rvkc_keyword_name_RE.match(keyword)
-
-        if match:
+        if match := cls._rvkc_keyword_name_RE.match(keyword):
             return '.'.join((match.group('keyword').strip().upper(),
                              match.group('field_specifier')))
         elif len(keyword) > 9 and keyword[:9].upper() == 'HIERARCH ':
@@ -646,8 +637,7 @@ class Card(_Verify):
         if not rest or rest[0] != "'" or rest.find(': ') < 2:
             return False
 
-        match = self._rvkc_keyword_val_comm_RE.match(rest)
-        if match:
+        if match := self._rvkc_keyword_val_comm_RE.match(rest):
             self._init_rvkc(keyword, match.group('keyword'),
                             match.group('rawval'), match.group('val'))
             return True
@@ -743,27 +733,18 @@ class Card(_Verify):
             #  Check for numbers with leading 0s.
             numr = self._number_NFSC_RE.match(m.group('numr'))
             digt = translate(numr.group('digt'), FIX_FP_TABLE2, ' ')
-            if numr.group('sign') is None:
-                sign = ''
-            else:
-                sign = numr.group('sign')
+            sign = '' if numr.group('sign') is None else numr.group('sign')
             value = _str_to_num(sign + digt)
 
         elif m.group('cplx') is not None:
             #  Check for numbers with leading 0s.
             real = self._number_NFSC_RE.match(m.group('real'))
             rdigt = translate(real.group('digt'), FIX_FP_TABLE2, ' ')
-            if real.group('sign') is None:
-                rsign = ''
-            else:
-                rsign = real.group('sign')
+            rsign = '' if real.group('sign') is None else real.group('sign')
             value = _str_to_num(rsign + rdigt)
             imag = self._number_NFSC_RE.match(m.group('imag'))
             idigt = translate(imag.group('digt'), FIX_FP_TABLE2, ' ')
-            if imag.group('sign') is None:
-                isign = ''
-            else:
-                isign = imag.group('sign')
+            isign = '' if imag.group('sign') is None else imag.group('sign')
             value += _str_to_num(isign + idigt) * 1j
         else:
             value = UNDEFINED
@@ -781,18 +762,14 @@ class Card(_Verify):
             return ''
 
         if len(self._image) > self.length:
-            comments = []
-            for card in self._itersubcards():
-                if card.comment:
-                    comments.append(card.comment)
+            comments = [card.comment for card in self._itersubcards() if card.comment]
             comment = '/ ' + ' '.join(comments).rstrip()
             m = self._value_NFSC_RE.match(comment)
         else:
             m = self._value_NFSC_RE.match(self._split()[1])
 
         if m is not None:
-            comment = m.group('comm')
-            if comment:
+            if comment := m.group('comm'):
                 return comment.rstrip()
         return ''
 
@@ -801,13 +778,7 @@ class Card(_Verify):
         Split the card image between the keyword and the rest of the card.
         """
 
-        if self._image is not None:
-            # If we already have a card image, don't try to rebuild a new card
-            # image, which self.image would do
-            image = self._image
-        else:
-            image = self.image
-
+        image = self._image if self._image is not None else self.image
         if self.keyword in self._commentary_keywords.union(['CONTINUE']):
             keyword, valuecomment = image.split(' ', 1)
         else:
@@ -869,7 +840,7 @@ class Card(_Verify):
             idigt = translate(imag.group('digt'), FIX_FP_TABLE, ' ')
             if imag.group('sign') is not None:
                 idigt = imag.group('sign') + idigt
-            value = '(%s, %s)' % (rdigt, idigt)
+            value = f'({rdigt}, {idigt})'
         self._valuestring = value
         # The value itself has not been modified, but its serialized
         # representation (as stored in self._valuestring) has been changed, so
@@ -877,15 +848,14 @@ class Card(_Verify):
         self._modified = True
 
     def _format_keyword(self):
-        if self.keyword:
-            if self.field_specifier:
-                return '%-*s' % (KEYWORD_LENGTH, self.keyword.split('.', 1)[0])
-            elif self._hierarch:
-                return 'HIERARCH %s ' % self.keyword
-            else:
-                return '%-*s' % (KEYWORD_LENGTH, self.keyword)
-        else:
+        if not self.keyword:
             return ' ' * KEYWORD_LENGTH
+        if self.field_specifier:
+            return '%-*s' % (KEYWORD_LENGTH, self.keyword.split('.', 1)[0])
+        elif self._hierarch:
+            return f'HIERARCH {self.keyword} '
+        else:
+            return '%-*s' % (KEYWORD_LENGTH, self.keyword)
 
     def _format_value(self):
         # value string
@@ -918,28 +888,15 @@ class Card(_Verify):
         return value
 
     def _format_comment(self):
-        if not self.comment:
-            return ''
-        else:
-            return ' / %s' % self._comment
+        return f' / {self._comment}' if self.comment else ''
 
     def _format_image(self):
         keyword = self._format_keyword()
 
         value = self._format_value()
         is_commentary = keyword.strip() in self._commentary_keywords
-        if is_commentary:
-            comment = ''
-        else:
-            comment = self._format_comment()
-
-        # equal sign string
-        # by default use the standard value indicator even for HIERARCH cards;
-        # later we may abbreviate it if necessary
-        delimiter = VALUE_INDICATOR
-        if is_commentary:
-            delimiter = ''
-
+        comment = '' if is_commentary else self._format_comment()
+        delimiter = '' if is_commentary else VALUE_INDICATOR
         # put all parts together
         output = ''.join([keyword, delimiter, value, comment])
 
@@ -954,23 +911,17 @@ class Card(_Verify):
             else:
                 # I guess the HIERARCH card spec is incompatible with CONTINUE
                 # cards
-                raise ValueError('The keyword %s with its value is too long' %
-                                 self.keyword)
+                raise ValueError(f'The keyword {self.keyword} with its value is too long')
 
         if len(output) <= self.length:
-            output = '%-80s' % output
-        else:
-            # longstring case (CONTINUE card)
-            # try not to use CONTINUE if the string value can fit in one line.
-            # Instead, just truncate the comment
-            if (isinstance(self.value, string_types) and
+            return '%-80s' % output
+        elif (isinstance(self.value, string_types) and
                 len(value) > (self.length - 10)):
-                output = self._format_long_image()
-            else:
-                warnings.warn('Card is too long, comment will be truncated.',
-                              VerifyWarning)
-                output = output[:Card.length]
-        return output
+            return self._format_long_image()
+        else:
+            warnings.warn('Card is too long, comment will be truncated.',
+                          VerifyWarning)
+            return output[:Card.length]
 
     def _format_long_image(self):
         """
@@ -985,7 +936,6 @@ class Card(_Verify):
             return self._format_long_commentary_image()
 
         value_length = 67
-        comment_length = 64
         output = []
 
         # do the value string
@@ -1007,17 +957,14 @@ class Card(_Verify):
 
             output.append('%-80s' % (headstr + value))
 
-        # do the comment string
-        comment_format = "%-s"
         if self.comment:
+            comment_length = 64
             words = _words_group(self.comment, comment_length)
+            # do the comment string
+            comment_format = "%-s"
             for idx, word in enumerate(words):
                 # If this is the final CONTINUE remove the '&'
-                if idx == len(words) - 1:
-                    headstr = "CONTINUE  '' / "
-                else:
-                    headstr = "CONTINUE  '&' / "
-
+                headstr = "CONTINUE  '' / " if idx == len(words) - 1 else "CONTINUE  '&' / "
                 comment = headstr + comment_format % word
                 output.append('%-80s' % comment)
 
@@ -1064,10 +1011,9 @@ class Card(_Verify):
         # verify the key, it is never fixable
         # always fix silently the case where "=" is before column 9,
         # since there is no way to communicate back to the _keys.
-        if ((self._image and self._image[:8].upper() == 'HIERARCH') or
-                self._hierarch):
-            pass
-        else:
+        if (
+            not self._image or self._image[:8].upper() != 'HIERARCH'
+        ) and not self._hierarch:
             if self._image:
                 # PyFITS will auto-uppercase any standard keyword, so lowercase
                 # keywords can only occur if they came from the wild
@@ -1086,10 +1032,14 @@ class Card(_Verify):
                 keyword = keyword.split('.', 1)[0]
 
             if not self._keywd_FSC_RE.match(keyword):
-                errs.append(self.run_option(
-                    option,
-                    err_text='Illegal keyword name %s' % repr(keyword),
-                    fixable=False))
+                errs.append(
+                    self.run_option(
+                        option,
+                        err_text=f'Illegal keyword name {repr(keyword)}',
+                        fixable=False,
+                    )
+                )
+
 
         # verify the value, it may be fixable
         keyword, valuecomment = self._split()
@@ -1117,14 +1067,13 @@ class Card(_Verify):
         m = self._value_NFSC_RE.match(valuecomment)
         if m is not None:
             comment = m.group('comm')
-            if comment is not None:
-                if not self._ascii_text_re.match(comment):
-                    errs.append(self.run_option(
-                        option,
-                        err_text='Unprintable string %r; header comments may '
-                                 'only contain printable ASCII characters' %
-                                 comment,
-                        fixable=False))
+            if comment is not None and not self._ascii_text_re.match(comment):
+                errs.append(self.run_option(
+                    option,
+                    err_text='Unprintable string %r; header comments may '
+                             'only contain printable ASCII characters' %
+                             comment,
+                    fixable=False))
 
         return errs
 
@@ -1181,12 +1130,10 @@ def _format_value(value):
     if isinstance(value, string_types):
         if value == '':
             return "''"
-        else:
-            exp_val_str = value.replace("'", "''")
-            val_str = "'%-8s'" % exp_val_str
-            return '%-20s' % val_str
+        exp_val_str = value.replace("'", "''")
+        val_str = "'%-8s'" % exp_val_str
+        return '%-20s' % val_str
 
-    # must be before int checking since bool is also int
     elif isinstance(value, (bool, np.bool_)):
         return '%20s' % repr(value)[0]  # T or F
 
@@ -1197,8 +1144,7 @@ def _format_value(value):
         return '%20s' % _format_float(value)
 
     elif isinstance(value, (complex, np.complexfloating)):
-        val_str = '(%s, %s)' % (_format_float(value.real),
-                                _format_float(value.imag))
+        val_str = f'({_format_float(value.real)}, {_format_float(value.imag)})'
         return '%20s' % val_str
 
     elif isinstance(value, Undefined):
@@ -1247,12 +1193,7 @@ def _pad(input):
         return input
     elif _len > Card.length:
         strlen = _len % Card.length
-        if strlen == 0:
-            return input
-        else:
-            return input + ' ' * (Card.length - strlen)
-
-    # minimum length is 80
+        return input if strlen == 0 else input + ' ' * (Card.length - strlen)
     else:
         strlen = _len % Card.length
         return input + ' ' * (Card.length - strlen)

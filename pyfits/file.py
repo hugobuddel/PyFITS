@@ -172,8 +172,7 @@ class _File(object):
                 self.memmap = False
 
     def __repr__(self):
-        return '<%s.%s %s>' % (self.__module__, self.__class__.__name__,
-                               self._file)
+        return f'<{self.__module__}.{self.__class__.__name__} {self._file}>'
 
     # Support the 'with' statement
     def __enter__(self):
@@ -183,9 +182,7 @@ class _File(object):
         self.close()
 
     def readable(self):
-        if self.writeonly:
-            return False
-        return isreadable(self._file)
+        return False if self.writeonly else isreadable(self._file)
 
     def read(self, size=None):
         if not hasattr(self._file, 'read'):
@@ -236,10 +233,6 @@ class _File(object):
             if actualsize < size:
                 raise ValueError('size %d is too few bytes for a %s array of '
                                  '%s' % (size, shape, dtype))
-            if actualsize < size:
-                raise ValueError('size %d is too many bytes for a %s array of '
-                                 '%s' % (size, shape, dtype))
-
         if self.memmap:
             if self._mmap is None:
                 # Instantiate Memmap array of the file offset at 0
@@ -273,9 +266,7 @@ class _File(object):
             return data
 
     def writable(self):
-        if self.readonly:
-            return False
-        return iswritable(self._file)
+        return False if self.readonly else iswritable(self._file)
 
     def write(self, string):
         if hasattr(self._file, 'write'):
@@ -368,16 +359,15 @@ class _File(object):
                 (hasattr(fileobj, 'len') and fileobj.len > 0)) or
                 (os.path.exists(self.name) and
                  os.path.getsize(self.name) != 0)):
-            if clobber:
-                warnings.warn("Overwriting existing file %r." % self.name)
-                if self.file_like and hasattr(fileobj, 'truncate'):
-                    fileobj.truncate(0)
-                else:
-                    if not closed:
-                        fileobj.close()
-                    os.remove(self.name)
-            else:
+            if not clobber:
                 raise IOError("File %r already exists." % self.name)
+            warnings.warn("Overwriting existing file %r." % self.name)
+            if self.file_like and hasattr(fileobj, 'truncate'):
+                fileobj.truncate(0)
+            else:
+                if not closed:
+                    fileobj.close()
+                os.remove(self.name)
 
     def _open_fileobj(self, fileobj, mode, clobber):
         """Open a FITS file from a file object or a GzipFile object."""
@@ -393,12 +383,17 @@ class _File(object):
             # custom file modes to raw file object modes, many of the latter
             # can be used appropriately for the former.  So determine whether
             # the modes match up appropriately
-            if ((mode in ('readonly', 'denywrite', 'copyonwrite') and
-                    not ('r' in fmode or '+' in fmode)) or
-                    (mode == 'append' and fmode not in ('ab+', 'rb+')) or
-                    (mode == 'ostream' and
-                     not ('w' in fmode or 'a' in fmode or '+' in fmode)) or
-                    (mode == 'update' and fmode not in ('rb+', 'wb+'))):
+            if (
+                mode in ('readonly', 'denywrite', 'copyonwrite')
+                and 'r' not in fmode
+                and '+' not in fmode
+                or (mode == 'append' and fmode not in ('ab+', 'rb+'))
+                or mode == 'ostream'
+                and 'w' not in fmode
+                and 'a' not in fmode
+                and '+' not in fmode
+                or (mode == 'update' and fmode not in ('rb+', 'wb+'))
+            ):
                 raise ValueError(
                     "Mode argument '%s' does not match mode of the input "
                     "file (%s)." % (mode, fmode))
@@ -489,9 +484,7 @@ class _File(object):
         # Make certain we're back at the beginning of the file
         # BZ2File does not support seek when the file is open for writing, but
         # when opening a file for write, bz2.BZ2File always truncates anyway.
-        if isinstance(self._file, bz2.BZ2File) and mode == 'ostream':
-            pass
-        else:
+        if not isinstance(self._file, bz2.BZ2File) or mode != 'ostream':
             self._file.seek(0)
 
     def _open_zipfile(self, fileobj, mode):
@@ -524,7 +517,7 @@ class _File(object):
         self.compression = 'zip'
 
     @classproperty(lazy=True)
-    def _mmap_available(cls):
+    def _mmap_available(self):
         """Tests that mmap, and specifically mmap.flush works.  This may
         be the case on some uncommon platforms (see
         https://github.com/astropy/astropy/issues/968).

@@ -50,11 +50,7 @@ class FITS_record(object):
 
         self.array = input
         self.row = row
-        if base:
-            width = len(base)
-        else:
-            width = self.array._nfields
-
+        width = len(base) if base else self.array._nfields
         s = slice(start, end, step).indices(width)
         self.start, self.end, self.step = s
         self.base = base
@@ -104,10 +100,8 @@ class FITS_record(object):
         Display a single row.
         """
 
-        outlist = []
-        for idx in xrange(len(self)):
-            outlist.append(repr(self[idx]))
-        return '(%s)' % ', '.join(outlist)
+        outlist = [repr(self[idx]) for idx in xrange(len(self))]
+        return f"({', '.join(outlist)})"
 
     def field(self, field):
         """
@@ -155,18 +149,23 @@ class FITS_rec(np.recarray):
 
     _record_type = FITS_record
 
-    def __new__(subtype, input):
+    def __new__(cls, input):
         """
         Construct a FITS record array from a recarray.
         """
 
         # input should be a record array
         if input.dtype.subdtype is None:
-            self = np.recarray.__new__(subtype, input.shape, input.dtype,
-                                       buf=input.data)
+            self = np.recarray.__new__(cls, input.shape, input.dtype, buf=input.data)
         else:
-            self = np.recarray.__new__(subtype, input.shape, input.dtype,
-                                       buf=input.data, strides=input.strides)
+            self = np.recarray.__new__(
+                cls,
+                input.shape,
+                input.dtype,
+                buf=input.data,
+                strides=input.strides,
+            )
+
 
         self._init()
         if self.dtype.fields:
@@ -318,10 +317,7 @@ class FITS_rec(np.recarray):
         # use the largest column shape as the shape of the record
         if nrows == 0:
             for arr in columns._arrays:
-                if arr is not None:
-                    dim = arr.shape[0]
-                else:
-                    dim = 0
+                dim = arr.shape[0] if arr is not None else 0
                 if dim > nrows:
                     nrows = dim
 
@@ -358,11 +354,7 @@ class FITS_rec(np.recarray):
             # zero so that no data is copied from the original input data.
             arr = column.array
 
-            if arr is None:
-                array_size = 0
-            else:
-                array_size = len(arr)
-
+            array_size = 0 if arr is None else len(arr)
             n = min(array_size, nrows)
 
             # TODO: At least *some* of this logic is mostly redundant with the
@@ -509,14 +501,11 @@ class FITS_rec(np.recarray):
             out._coldefs._arrays = arrays
             return out
 
-        # if not a slice, do this because Record has no __getstate__.
-        # also more efficient.
         else:
             if isinstance(key, int) and key >= len(self):
                 raise IndexError("Index out of bounds")
 
-            newrecord = self._record_type(self, key)
-            return newrecord
+            return self._record_type(self, key)
 
     def __setitem__(self, key, value):
         if self._coldefs is None:
@@ -662,17 +651,16 @@ class FITS_rec(np.recarray):
         Currently for internal use only.
         """
 
-        if _has_unicode_fields(self):
-            total_itemsize = 0
-            for field in self.dtype.fields.values():
-                itemsize = field[0].itemsize
-                if field[0].kind == 'U':
-                    itemsize = itemsize // 4
-                total_itemsize += itemsize
-            return total_itemsize
-        else:
+        if not _has_unicode_fields(self):
             # Just return the normal itemsize
             return self.itemsize
+        total_itemsize = 0
+        for field in self.dtype.fields.values():
+            itemsize = field[0].itemsize
+            if field[0].kind == 'U':
+                itemsize = itemsize // 4
+            total_itemsize += itemsize
+        return total_itemsize
 
     def field(self, key):
         """
@@ -1101,8 +1089,8 @@ class FITS_rec(np.recarray):
             field = self._converted.get(name, raw_field)
 
             # conversion for both ASCII and binary tables
-            if _number or _str:
-                if _number and (_scale or _zero) and column._physical_values:
+            if _number:
+                if (_scale or _zero) and column._physical_values:
                     dummy = field.copy()
                     if _zero:
                         dummy -= bzero
@@ -1120,26 +1108,24 @@ class FITS_rec(np.recarray):
                 # ASCII table, convert numbers to strings
                 if isinstance(self._coldefs, _AsciiColDefs):
                     self._scale_back_ascii(indx, dummy, raw_field)
-                # binary table string column
                 elif isinstance(raw_field, chararray.chararray):
                     self._scale_back_strings(indx, dummy, raw_field)
-                # all other binary table columns
                 else:
                     if len(raw_field) and isinstance(raw_field[0],
                                                      np.integer):
                         dummy = np.around(dummy)
 
-                    if raw_field.shape == dummy.shape:
-                        raw_field[:] = dummy
-                    else:
-                        # Reshaping the data is necessary in cases where the
-                        # TDIMn keyword was used to shape a column's entries
-                        # into arrays
-                        raw_field[:] = dummy.ravel().view(raw_field.dtype)
+                    raw_field[:] = (
+                        dummy
+                        if raw_field.shape == dummy.shape
+                        else dummy.ravel().view(raw_field.dtype)
+                    )
 
                 del dummy
 
-            # ASCII table does not have Boolean type
+            elif _str:
+                continue
+
             elif _bool and name in self._converted:
                 choices = (np.array([ord('F')], dtype=np.int8)[0],
                            np.array([ord('T')], dtype=np.int8)[0])
@@ -1232,11 +1218,7 @@ class FITS_rec(np.recarray):
         # TODO: It would be nice if these string column formatting
         # details were left to a specialized class, as is the case
         # with FormatX and FormatP
-        if 'A' in format:
-            _pc = '%-'
-        else:
-            _pc = '%'
-
+        _pc = '%-' if 'A' in format else '%'
         fmt = ''.join([_pc, format[1:], ASCII2STR[format[0]],
                        (' ' * trail)])
 
@@ -1258,7 +1240,7 @@ class FITS_rec(np.recarray):
             if trailing_decimal and value[0] == ' ':
                 # We have some extra space in the field for the trailing
                 # decimal point
-                value = value[1:] + '.'
+                value = f'{value[1:]}.'
 
             output_field[jdx] = value
 

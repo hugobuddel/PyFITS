@@ -69,8 +69,16 @@ if COMPRESSION_SUPPORTED:
         CFITSIO_SUPPORTS_Q_FORMAT = True
 
 
-COMPRESSION_KEYWORDS = set(['ZIMAGE', 'ZCMPTYPE', 'ZBITPIX', 'ZNAXIS',
-                            'ZMASKCMP', 'ZSIMPLE', 'ZTENSION', 'ZEXTEND'])
+COMPRESSION_KEYWORDS = {
+    'ZIMAGE',
+    'ZCMPTYPE',
+    'ZBITPIX',
+    'ZNAXIS',
+    'ZMASKCMP',
+    'ZSIMPLE',
+    'ZTENSION',
+    'ZEXTEND',
+}
 
 
 class CompImageHeader(Header):
@@ -303,9 +311,7 @@ class CompImageHeader(Header):
                 warnings.warn(msg)
             return True
 
-        m = cls._zdef_re.match(keyword)
-
-        if m:
+        if m := cls._zdef_re.match(keyword):
             label = m.group('label').upper()
             num = m.group('num')
             if num is not None and label in cls._indexed_compression_keywords:
@@ -642,8 +648,11 @@ class CompImageHDU(BinTableHDU):
         self._uint = uint
         self._scale_back = scale_back
 
-        self._axes = [self._header.get('ZNAXIS' + str(axis + 1), 0)
-                      for axis in range(self._header.get('ZNAXIS', 0))]
+        self._axes = [
+            self._header.get(f'ZNAXIS{str(axis + 1)}', 0)
+            for axis in range(self._header.get('ZNAXIS', 0))
+        ]
+
 
         # store any scale factors from the table header
         if do_not_scale_image_data:

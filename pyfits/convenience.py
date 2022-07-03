@@ -212,10 +212,7 @@ def getdata(filename, *args, **kwargs):
     if isinstance(view, type) and issubclass(view, np.ndarray):
         data = data.view(view)
 
-    if header:
-        return data, hdr
-    else:
-        return data
+    return (data, hdr) if header else data
 
 
 def getval(filename, keyword, *args, **kwargs):
@@ -546,7 +543,7 @@ def info(filename, output=None, **kwargs):
 
     mode, closed = _get_file_mode(filename, default='readonly')
     # Set the default value for the ignore_missing_end parameter
-    if not 'ignore_missing_end' in kwargs:
+    if 'ignore_missing_end' not in kwargs:
         kwargs['ignore_missing_end'] = True
 
     f = fitsopen(filename, mode=mode, **kwargs)
@@ -611,7 +608,7 @@ def tabledump(filename, datafile=None, cdfile=None, hfile=None, ext=1,
         # TODO: Really need to provide a better way to access the name of any
         # files underlying an HDU
         root, tail = os.path.splitext(f._HDUList__file.name)
-        datafile = root + '_' + repr(ext) + '.txt'
+        datafile = f'{root}_{repr(ext)}.txt'
 
     # Dump the data from the HDU to the files
     f[ext].dump(datafile, cdfile, hfile, clobber)
@@ -706,10 +703,16 @@ def _getext(filename, mode, *args, **kwargs):
     elif len(args) > 2:
         raise TypeError('Too many positional arguments.')
 
-    if (ext is not None and
-            not (_is_int(ext) or
-                 (isinstance(ext, tuple) and len(ext) == 2 and
-                  isinstance(ext[0], string_types) and _is_int(ext[1])))):
+    if (
+        ext is not None
+        and not _is_int(ext)
+        and (
+            not isinstance(ext, tuple)
+            or len(ext) != 2
+            or not isinstance(ext[0], string_types)
+            or not _is_int(ext[1])
+        )
+    ):
         raise ValueError(
             'The ext keyword must be either an extension number '
             '(zero-indexed) or a (extname, extver) tuple.')
@@ -723,10 +726,7 @@ def _getext(filename, mode, *args, **kwargs):
     elif ext is not None and (extname is not None or extver is not None):
         raise TypeError(err_msg)
     elif extname:
-        if extver:
-            ext = (extname, extver)
-        else:
-            ext = (extname, 1)
+        ext = (extname, extver) if extver else (extname, 1)
     elif extver and extname is None:
         raise TypeError('extver alone cannot specify an extension.')
 

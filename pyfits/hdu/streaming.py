@@ -83,31 +83,20 @@ class StreamingHDU(object):
             if 'SIMPLE' not in self._header:
                 hdulist = HDUList([PrimaryHDU()])
                 hdulist.writeto(name, 'exception')
-        else:
+        elif 'SIMPLE' in self._header:
+            self._header.set('XTENSION', 'IMAGE', 'Image extension',
+                             after='SIMPLE')
+            del self._header['SIMPLE']
 
-            # This will not be the first extension in the file so we
-            # must change the Primary header provided into an image
-            # extension header.
+            if 'PCOUNT' not in self._header:
+                dim = self._header['NAXIS']
 
-            if 'SIMPLE' in self._header:
-                self._header.set('XTENSION', 'IMAGE', 'Image extension',
-                                 after='SIMPLE')
-                del self._header['SIMPLE']
+                dim = '' if dim == 0 else str(dim)
+                self._header.set('PCOUNT', 0, 'number of parameters', after=f'NAXIS{dim}')
 
-                if 'PCOUNT' not in self._header:
-                    dim = self._header['NAXIS']
-
-                    if dim == 0:
-                        dim = ''
-                    else:
-                        dim = str(dim)
-
-                    self._header.set('PCOUNT', 0, 'number of parameters',
-                                     after='NAXIS' + dim)
-
-                if 'GCOUNT' not in self._header:
-                    self._header.set('GCOUNT', 1, 'number of groups',
-                                     after='PCOUNT')
+            if 'GCOUNT' not in self._header:
+                self._header.set('GCOUNT', 1, 'number of groups',
+                                 after='PCOUNT')
 
         self._ffo = _File(name, 'append')
 
@@ -121,10 +110,7 @@ class StreamingHDU(object):
         self._data_offset = self._ffo.tell()
         self._size = self.size
 
-        if self._size != 0:
-            self.writecomplete = False
-        else:
-            self.writecomplete = True
+        self.writecomplete = self._size == 0
 
     # Support the 'with' statement
     def __enter__(self):
@@ -172,12 +158,7 @@ class StreamingHDU(object):
             raise TypeError('Supplied data does not match the type specified '
                             'in the header.')
 
-        if data.dtype.str[0] != '>':
-            # byteswap little endian arrays before writing
-            output = data.byteswap()
-        else:
-            output = data
-
+        output = data.byteswap() if data.dtype.str[0] != '>' else data
         self._ffo.writearray(output)
 
         if self._ffo.tell() - self._data_offset == self._size:
@@ -202,15 +183,11 @@ class StreamingHDU(object):
             simple = self._header.get('SIMPLE', 'F')
             random_groups = self._header.get('GROUPS', 'F')
 
-            if simple == 'T' and random_groups == 'T':
-                groups = 1
-            else:
-                groups = 0
-
+            groups = 1 if simple == 'T' and random_groups == 'T' else 0
             size = 1
 
             for idx in range(groups, naxis):
-                size = size * self._header['NAXIS' + str(idx + 1)]
+                size = size * self._header[f'NAXIS{str(idx + 1)}']
             bitpix = self._header['BITPIX']
             gcount = self._header.get('GCOUNT', 1)
             pcount = self._header.get('PCOUNT', 0)

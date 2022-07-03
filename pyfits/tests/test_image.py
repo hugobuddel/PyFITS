@@ -274,7 +274,7 @@ class TestImageFunctions(PyfitsTestCase):
             assert len(w) == 3
             assert err_text in str(w[1].message)
 
-        fix_text = err_text + "  Fixed by inserting one as 0th HDU."
+        fix_text = f"{err_text}  Fixed by inserting one as 0th HDU."
         with catch_warnings(record=True) as w:
             with CaptureStdio():
                 hdu.writeto(self.temp('test_new2.fits'), 'fix')

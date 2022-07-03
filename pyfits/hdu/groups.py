@@ -68,16 +68,12 @@ class Group(FITS_record):
             if len(indx) == 1:
                 self.array[self.row][indx[0]] = value
 
-            # if more than one group parameter have the same name, the
-            # value must be a list (or tuple) containing arrays
+            elif isinstance(value, (list, tuple)) and len(indx) == len(value):
+                for i in range(len(indx)):
+                    self.array[self.row][indx[i]] = value[i]
             else:
-                if isinstance(value, (list, tuple)) and \
-                   len(indx) == len(value):
-                    for i in range(len(indx)):
-                        self.array[self.row][indx[i]] = value[i]
-                else:
-                    raise ValueError('Parameter value must be a sequence '
-                                     'with %d arrays/numbers.' % len(indx))
+                raise ValueError('Parameter value must be a sequence '
+                                 'with %d arrays/numbers.' % len(indx))
 
 
 class GroupData(FITS_rec):
@@ -125,11 +121,7 @@ class GroupData(FITS_rec):
         """
 
         if not isinstance(input, FITS_rec):
-            if pardata is None:
-                npars = 0
-            else:
-                npars = len(pardata)
-
+            npars = 0 if pardata is None else len(pardata)
             if parbscales is None:
                 parbscales = [None] * npars
             if parbzeros is None:
@@ -149,7 +141,7 @@ class GroupData(FITS_rec):
 
             fits_fmt = GroupsHDU._bitpix2tform[bitpix]  # -32 -> 'E'
             format = FITS2NUMPY[fits_fmt]  # 'E' -> 'f4'
-            data_fmt = '%s%s' % (str(input.shape[1:]), format)
+            data_fmt = f'{str(input.shape[1:])}{format}'
             formats = ','.join(([format] * npars) + [data_fmt])
             gcount = input.shape[0]
 
@@ -297,7 +289,7 @@ class GroupsHDU(PrimaryHDU, _TableLikeHDU):
         pcount = self._header['PCOUNT']
         # The FITS standard doesn't really say what to do if a parname is
         # missing, so for now just assume that won't happen
-        return [self._header['PTYPE' + str(idx + 1)] for idx in range(pcount)]
+        return [self._header[f'PTYPE{str(idx + 1)}'] for idx in range(pcount)]
 
     @lazyproperty
     def columns(self):
@@ -311,9 +303,9 @@ class GroupsHDU(PrimaryHDU, _TableLikeHDU):
         bzeros = []
 
         for idx in range(pcount):
-            bscales.append(self._header.get('PSCAL' + str(idx + 1), None))
-            bzeros.append(self._header.get('PZERO' + str(idx + 1), None))
-            parnames.append(self._header['PTYPE' + str(idx + 1)])
+            bscales.append(self._header.get(f'PSCAL{str(idx + 1)}', None))
+            bzeros.append(self._header.get(f'PZERO{str(idx + 1)}', None))
+            parnames.append(self._header[f'PTYPE{str(idx + 1)}'])
 
         formats = [format] * len(parnames)
         dim = [None] * len(parnames)
@@ -335,17 +327,11 @@ class GroupsHDU(PrimaryHDU, _TableLikeHDU):
                 for name, fmt, bscale, bzero, dim in
                 zip(parnames, formats, bscales, bzeros, dim)]
 
-        coldefs = ColDefs(cols)
-        return coldefs
+        return ColDefs(cols)
 
     @property
     def _nrows(self):
-        if not self._data_loaded:
-            # The number of 'groups' equates to the number of rows in the table
-            # representation of the data
-            return self._header.get('GCOUNT', 0)
-        else:
-            return len(self.data)
+        return len(self.data) if self._data_loaded else self._header.get('GCOUNT', 0)
 
     @lazyproperty
     def _theap(self):
@@ -365,7 +351,7 @@ class GroupsHDU(PrimaryHDU, _TableLikeHDU):
         if naxis > 1:
             size = 1
             for idx in range(1, naxis):
-                size = size * self._header['NAXIS' + str(idx + 1)]
+                size = size * self._header[f'NAXIS{str(idx + 1)}']
             bitpix = self._header['BITPIX']
             gcount = self._header.get('GCOUNT', 1)
             pcount = self._header.get('PCOUNT', 0)
@@ -394,23 +380,18 @@ class GroupsHDU(PrimaryHDU, _TableLikeHDU):
 
         # add NAXISi if it does not exist
         for idx, axis in enumerate(self._axes):
-            if (idx == 0):
-                after = 'NAXIS'
-            else:
-                after = 'NAXIS' + str(idx)
-
-            self._header.set('NAXIS' + str(idx + 1), axis, after=after)
+            after = 'NAXIS' if (idx == 0) else f'NAXIS{str(idx)}'
+            self._header.set(f'NAXIS{str(idx + 1)}', axis, after=after)
 
         # delete extra NAXISi's
         for idx in range(len(self._axes) + 1, old_naxis + 1):
             try:
-                del self._header['NAXIS' + str(idx)]
+                del self._header[f'NAXIS{str(idx)}']
             except KeyError:
                 pass
 
         if self._has_data and isinstance(self.data, GroupData):
-            self._header.set('GROUPS', True,
-                             after='NAXIS' + str(len(self._axes)))
+            self._header.set('GROUPS', True, after=f'NAXIS{len(self._axes)}')
             self._header.set('PCOUNT', len(self.data.parnames), after='GROUPS')
             self._header.set('GCOUNT', len(self.data), after='PCOUNT')
 
@@ -422,20 +403,17 @@ class GroupsHDU(PrimaryHDU, _TableLikeHDU):
                 self._header.set('BZERO', column.bzero)
 
             for idx, name in enumerate(self.data.parnames):
-                self._header.set('PTYPE' + str(idx + 1), name)
+                self._header.set(f'PTYPE{str(idx + 1)}', name)
                 column = self.data._coldefs[idx]
                 scale, zero = self.data._get_scale_factors(column)[3:5]
                 if scale:
-                    self._header.set('PSCAL' + str(idx + 1), column.bscale)
+                    self._header.set(f'PSCAL{str(idx + 1)}', column.bscale)
                 if zero:
-                    self._header.set('PZERO' + str(idx + 1), column.bzero)
+                    self._header.set(f'PZERO{str(idx + 1)}', column.bzero)
 
         # Update the position of the EXTEND keyword if it already exists
         if 'EXTEND' in self._header:
-            if len(self._axes):
-                after = 'NAXIS' + str(len(self._axes))
-            else:
-                after = 'NAXIS'
+            after = f'NAXIS{len(self._axes)}' if len(self._axes) else 'NAXIS'
             self._header.set('EXTEND', after=after)
 
     def _writedata_internal(self, fileobj):
@@ -454,10 +432,7 @@ class GroupsHDU(PrimaryHDU, _TableLikeHDU):
 
             # Based on the system type, determine the byteorders that
             # would need to be swapped to get to big-endian output
-            if sys.byteorder == 'little':
-                swap_types = ('<', '=')
-            else:
-                swap_types = ('<',)
+            swap_types = ('<', '=') if sys.byteorder == 'little' else ('<', )
             # deal with unsigned integer 16, 32 and 64 data
             if _is_pseudo_unsigned(self.data.dtype):
                 # Convert the unsigned array to signed
@@ -508,40 +483,39 @@ class GroupsHDU(PrimaryHDU, _TableLikeHDU):
         Calculate the value for the ``DATASUM`` card in the HDU.
         """
 
-        if self._has_data:
-            # We have the data to be used.
-            # Check the byte order of the data.  If it is little endian we
-            # must swap it before calculating the datasum.
-            # TODO: Maybe check this on a per-field basis instead of assuming
-            # that all fields have the same byte order?
-            byteorder = \
-                self.data.dtype.fields[self.data.dtype.names[0]][0].str[0]
-
-            if byteorder != '>':
-                byteswapped = True
-                d = self.data.byteswap(True)
-                d.dtype = d.dtype.newbyteorder('>')
-            else:
-                byteswapped = False
-                d = self.data
-
-            byte_data = d.view(type=np.ndarray, dtype=np.ubyte)
-
-            cs = self._compute_checksum(byte_data, blocking=blocking)
-
-            # If the data was byteswapped in this method then return it to
-            # its original little-endian order.
-            if byteswapped:
-                d.byteswap(True)
-                d.dtype = d.dtype.newbyteorder('<')
-
-            return cs
-        else:
+        if not self._has_data:
             # This is the case where the data has not been read from the file
             # yet.  We can handle that in a generic manner so we do it in the
             # base class.  The other possibility is that there is no data at
             # all.  This can also be handled in a generic manner.
             return super(GroupsHDU, self)._calculate_datasum(blocking=blocking)
+        # We have the data to be used.
+        # Check the byte order of the data.  If it is little endian we
+        # must swap it before calculating the datasum.
+        # TODO: Maybe check this on a per-field basis instead of assuming
+        # that all fields have the same byte order?
+        byteorder = \
+            self.data.dtype.fields[self.data.dtype.names[0]][0].str[0]
+
+        if byteorder != '>':
+            byteswapped = True
+            d = self.data.byteswap(True)
+            d.dtype = d.dtype.newbyteorder('>')
+        else:
+            byteswapped = False
+            d = self.data
+
+        byte_data = d.view(type=np.ndarray, dtype=np.ubyte)
+
+        cs = self._compute_checksum(byte_data, blocking=blocking)
+
+        # If the data was byteswapped in this method then return it to
+        # its original little-endian order.
+        if byteswapped:
+            d.byteswap(True)
+            d.dtype = d.dtype.newbyteorder('<')
+
+        return cs
 
     def _summary(self):
         summary = super(GroupsHDU, self)._summary()
@@ -551,9 +525,9 @@ class GroupsHDU(PrimaryHDU, _TableLikeHDU):
         if shape:
             shape = shape[1:]
 
-            if shape and all(shape):
-                # Update the format
-                format = self.columns[0].dtype.name
+        if shape and all(shape):
+            # Update the format
+            format = self.columns[0].dtype.name
 
         # Update the GCOUNT report
         gcount = '%d Groups  %d Parameters' % (self._gcount, self._pcount)
@@ -590,8 +564,8 @@ def _unique_parnames(names):
     for name in names:
         name_upper = name.upper()
         while name_upper in upper_names:
-            name = '_' + name
-            name_upper = '_' + name_upper
+            name = f'_{name}'
+            name_upper = f'_{name_upper}'
 
         unique_names.append(name)
         upper_names.add(name_upper)

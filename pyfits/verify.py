@@ -36,13 +36,12 @@ class _Verify(object):
 
         if option in ['warn', 'exception']:
             fixable = False
-        # fix the value
         elif not fixable:
-            text = 'Unfixable error: %s' % text
+            text = f'Unfixable error: {text}'
         else:
             if fix:
                 fix()
-            text += '  ' + fix_text
+            text += f'  {fix_text}'
 
         return (fixable, text)
 
@@ -142,9 +141,8 @@ class _ErrList(list):
         # go through the list twice, first time print out all top level
         # messages
         for item in self:
-            if not isinstance(item, _ErrList):
-                if filter is None or filter(item):
-                    yield item[0], indent(item[1], shift=shift)
+            if not isinstance(item, _ErrList) and (filter is None or filter(item)):
+                yield item[0], indent(item[1], shift=shift)
 
         # second time go through the next level items, each of the next level
         # must present, even it has nothing.
@@ -160,11 +158,8 @@ class _ErrList(list):
                     if self.unit:
                         # This line is sort of a header for the next level in
                         # the hierarchy
-                        yield None, indent('%s %s:' % (self.unit, element),
-                                           shift=shift)
+                        yield (None, indent(f'{self.unit} {element}:', shift=shift))
                     yield first_line
 
-                for line in next_lines:
-                    yield line
-
+                yield from next_lines
                 element += 1

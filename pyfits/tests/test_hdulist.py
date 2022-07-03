@@ -348,30 +348,26 @@ class TestHDUListFunctions(PyfitsTestCase):
         hdu = fits.PrimaryHDU(np.arange(100, dtype=np.int32))
         hdul = fits.HDUList()
         hdul.append(hdu)
-        tmpfile = open(self.temp('tmpfile.fits'), 'wb')
-        hdul.writeto(tmpfile)
-        tmpfile.close()
-
+        with open(self.temp('tmpfile.fits'), 'wb') as tmpfile:
+            hdul.writeto(tmpfile)
         info = [(0, 'PRIMARY', 'PrimaryHDU', 5, (100,), 'int32', '')]
 
         assert fits.info(self.temp('tmpfile.fits'), output=False) == info
 
     def test_file_like_2(self):
         hdu = fits.PrimaryHDU(np.arange(100, dtype=np.int32))
-        tmpfile = open(self.temp('tmpfile.fits'), 'wb')
-        hdul = fits.open(tmpfile, mode='ostream')
-        hdul.append(hdu)
-        hdul.flush()
-        tmpfile.close()
+        with open(self.temp('tmpfile.fits'), 'wb') as tmpfile:
+            hdul = fits.open(tmpfile, mode='ostream')
+            hdul.append(hdu)
+            hdul.flush()
         hdul.close()
 
         info = [(0, 'PRIMARY', 'PrimaryHDU', 5, (100,), 'int32', '')]
         assert fits.info(self.temp('tmpfile.fits'), output=False) == info
 
     def test_file_like_3(self):
-        tmpfile = open(self.temp('tmpfile.fits'), 'wb')
-        fits.writeto(tmpfile, np.arange(100, dtype=np.int32))
-        tmpfile.close()
+        with open(self.temp('tmpfile.fits'), 'wb') as tmpfile:
+            fits.writeto(tmpfile, np.arange(100, dtype=np.int32))
         info = [(0, 'PRIMARY', 'PrimaryHDU', 5, (100,), 'int32', '')]
         assert fits.info(self.temp('tmpfile.fits'), output=False) == info
 

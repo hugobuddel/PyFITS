@@ -29,7 +29,7 @@ HEADER_END_RE = re.compile(encode_ascii(
 
 # According to the FITS standard the only characters that may appear in a
 # header record are the restricted ASCII chars from 0x20 through 0x7E.
-VALID_HEADER_CHARS = set(chr(x) for x in range(0x20, 0x7F))
+VALID_HEADER_CHARS = {chr(x) for x in range(0x20, 0x7F)}
 END_CARD = 'END' + ' ' * 77
 
 
@@ -120,10 +120,7 @@ class Header(object):
             key = key.upper()
             # Special case for commentary cards
             return _HeaderCommentaryCards(self, key)
-        if isinstance(key, tuple):
-            keyword = key[0]
-        else:
-            keyword = key
+        keyword = key[0] if isinstance(key, tuple) else key
         card = self._cards[self._cardindex(key)]
         if card.field_specifier is not None and keyword == card.rawkeyword:
             # This is RVKC; if only the top-level keyword was specified return
@@ -352,10 +349,9 @@ class Header(object):
                 if next_image == END_CARD:
                     image = []
                     break
-            else:
-                if next_image.split(sep)[0].rstrip() == 'END':
-                    image = []
-                    break
+            elif next_image.split(sep)[0].rstrip() == 'END':
+                image = []
+                break
 
             image = [next_image]
 
@@ -412,9 +408,7 @@ class Header(object):
 
             def block_iter(nbytes):
                 while True:
-                    data = fileobj.read(nbytes)
-
-                    if data:
+                    if data := fileobj.read(nbytes):
                         yield data
                     else:
                         break
@@ -495,7 +489,7 @@ class Header(object):
 
         # Strip any zero-padding (see ticket #106)
         if header_str and header_str[-1] == '\0':
-            if is_eof and header_str.strip('\0') == '':
+            if is_eof and not header_str.strip('\0'):
                 # TODO: Pass this warning to validation framework
                 warnings.warn(
                     'Unexpected extra padding at the end of the file.  This '
@@ -541,8 +535,7 @@ class Header(object):
             # file is malformatted
             if mo.group('invalid'):
                 offset = mo.start()
-                trailing = block[offset + 3:offset + card_len - 3].rstrip()
-                if trailing:
+                if trailing := block[offset + 3 : offset + card_len - 3].rstrip():
                     trailing = repr(trailing).lstrip('ub')
                     # TODO: Pass this warning up to the validation framework
                     warnings.warn(
@@ -919,11 +912,7 @@ class Header(object):
             raise TypeError('Header.pop expected at most 2 arguments, got '
                             '%d' % len(args))
 
-        if len(args) == 0:
-            key = -1
-        else:
-            key = args[0]
-
+        key = -1 if len(args) == 0 else args[0]
         try:
             value = self[key]
         except (KeyError, IndexError):
@@ -1163,11 +1152,7 @@ class Header(object):
         if strip:
             temp._strip()
 
-        if len(self):
-            first = self.cards[0].keyword
-        else:
-            first = None
-
+        first = self.cards[0].keyword if len(self) else None
         # We don't immediately modify the header, because first we need to sift
         # out any duplicates in the new header prior to adding them to the
         # existing header, but while *allowing* duplicates from the header
@@ -1176,27 +1161,7 @@ class Header(object):
 
         for idx, card in enumerate(temp.cards):
             keyword = card.keyword
-            if keyword not in Card._commentary_keywords:
-                if unique and not update and keyword in self:
-                    continue
-                elif update:
-                    if idx == 0 and update_first:
-                        # Dumbly update the first keyword to either SIMPLE or
-                        # XTENSION as the case may be, as was in the case in
-                        # Header.fromTxtFile
-                        if ((keyword == 'SIMPLE' and first == 'XTENSION') or
-                                (keyword == 'XTENSION' and first == 'SIMPLE')):
-                            del self[0]
-                            self.insert(0, card)
-                        else:
-                            self[keyword] = (card.value, card.comment)
-                    elif keyword in self:
-                        self[keyword] = (card.value, card.comment)
-                    else:
-                        extend_cards.append(card)
-                else:
-                    extend_cards.append(card)
-            else:
+            if keyword in Card._commentary_keywords:
                 if (unique or update) and keyword in self:
                     if card.is_blank:
                         extend_cards.append(card)
@@ -1210,6 +1175,25 @@ class Header(object):
                 else:
                     extend_cards.append(card)
 
+            elif unique and not update and keyword in self:
+                continue
+            elif update:
+                if idx == 0 and update_first:
+                    # Dumbly update the first keyword to either SIMPLE or
+                    # XTENSION as the case may be, as was in the case in
+                    # Header.fromTxtFile
+                    if ((keyword == 'SIMPLE' and first == 'XTENSION') or
+                            (keyword == 'XTENSION' and first == 'SIMPLE')):
+                        del self[0]
+                        self.insert(0, card)
+                    else:
+                        self[keyword] = (card.value, card.comment)
+                elif keyword in self:
+                    self[keyword] = (card.value, card.comment)
+                else:
+                    extend_cards.append(card)
+            else:
+                extend_cards.append(card)
         for card in extend_cards:
             self.append(card, useblanks=useblanks, bottom=bottom, end=end)
 
@@ -1259,18 +1243,13 @@ class Header(object):
         if stop is None:
             stop = len(self._cards)
 
-        if stop < start:
-            step = -1
-        else:
-            step = 1
-
+        step = -1 if stop < start else 1
         norm_keyword = Card.normalize_keyword(keyword)
 
         for idx in range(start, stop, step):
             if self._cards[idx].keyword.upper() == norm_keyword:
                 return idx
-        else:
-            raise ValueError('The keyword %r is not in the header.' % keyword)
+        raise ValueError('The keyword %r is not in the header.' % keyword)
 
     def insert(self, key, card, useblanks=True, after=False):
         """
@@ -1299,15 +1278,7 @@ class Header(object):
             rather than before it.  Defaults to `False`.
         """
 
-        if not isinstance(key, int):
-            # Don't pass through ints to _cardindex because it will not take
-            # kindly to indices outside the existing number of cards in the
-            # header, which insert needs to be able to support (for example
-            # when inserting into empty headers)
-            idx = self._cardindex(key)
-        else:
-            idx = key
-
+        idx = key if isinstance(key, int) else self._cardindex(key)
         if after:
             if idx == -1:
                 idx = len(self._cards)
@@ -1338,9 +1309,7 @@ class Header(object):
         # used by list.insert()
         if idx < 0:
             idx += len(self._cards) - 1
-            if idx < 0:
-                idx = 0
-
+        idx = max(idx, 0)
         # All the keyword indices above the insertion point must be updated
         self._updateindices(idx)
 
@@ -1403,15 +1372,20 @@ class Header(object):
         if newkeyword == 'CONTINUE':
             raise ValueError('Can not rename to CONTINUE')
 
-        if (newkeyword in Card._commentary_keywords or
-                oldkeyword in Card._commentary_keywords):
-            if not (newkeyword in Card._commentary_keywords and
-                    oldkeyword in Card._commentary_keywords):
-                raise ValueError('Regular and commentary keys can not be '
-                                 'renamed to each other.')
-        elif not force and newkeyword in self:
-            raise ValueError('Intended keyword %s already exists in header.'
-                             % newkeyword)
+        if (
+            newkeyword in Card._commentary_keywords
+            and oldkeyword not in Card._commentary_keywords
+            or newkeyword not in Card._commentary_keywords
+            and oldkeyword in Card._commentary_keywords
+        ):
+            raise ValueError('Regular and commentary keys can not be '
+                             'renamed to each other.')
+        elif (
+            newkeyword not in Card._commentary_keywords
+            and not force
+            and newkeyword in self
+        ):
+            raise ValueError(f'Intended keyword {newkeyword} already exists in header.')
 
         idx = self.index(oldkeyword)
         card = self.cards[idx]
@@ -1599,11 +1573,11 @@ class Header(object):
             insertionkey = before
 
         def get_insertion_idx():
-            if not (isinstance(insertionkey, int) and
-                    insertionkey >= len(self._cards)):
-                idx = self._cardindex(insertionkey)
-            else:
-                idx = insertionkey
+            idx = (
+                insertionkey
+                if (isinstance(insertionkey, int) and insertionkey >= len(self._cards))
+                else self._cardindex(insertionkey)
+            )
 
             if before is None:
                 idx += 1
@@ -1664,10 +1638,14 @@ class Header(object):
     def _countblanks(self):
         """Returns the number of blank cards at the end of the Header."""
 
-        for idx in range(1, len(self._cards)):
-            if not self._cards[-idx].is_blank:
-                return idx - 1
-        return 0
+        return next(
+            (
+                idx - 1
+                for idx in range(1, len(self._cards))
+                if not self._cards[-idx].is_blank
+            ),
+            0,
+        )
 
     def _useblanks(self, count):
         for _ in range(count):
@@ -1704,11 +1682,16 @@ class Header(object):
         Used to implement Header.__setitem__ and CardAccessor.__setitem__.
         """
 
-        if isinstance(key, slice) or self._haswildcard(key):
-            if isinstance(key, slice):
-                indices = range(*key.indices(len(target)))
-            else:
-                indices = self._wildcardmatch(key)
+        if (
+            isinstance(key, slice)
+            or not isinstance(key, slice)
+            and self._haswildcard(key)
+        ):
+            indices = (
+                range(*key.indices(len(target)))
+                if isinstance(key, slice)
+                else self._wildcardmatch(key)
+            )
 
             if isinstance(value, string_types) or not isiterable(value):
                 value = itertools.repeat(value, len(indices))
@@ -1763,19 +1746,11 @@ class Header(object):
         # a way for HDU classes to specify some headers that are specific only
         # to that type, and should be removed otherwise.
 
-        if 'NAXIS' in self:
-            naxis = self['NAXIS']
-        else:
-            naxis = 0
-
-        if 'TFIELDS' in self:
-            tfields = self['TFIELDS']
-        else:
-            tfields = 0
-
+        naxis = self['NAXIS'] if 'NAXIS' in self else 0
+        tfields = self['TFIELDS'] if 'TFIELDS' in self else 0
         for idx in range(naxis):
             try:
-                del self['NAXIS' + str(idx + 1)]
+                del self[f'NAXIS{str(idx + 1)}']
             except KeyError:
                 pass
 
@@ -1854,11 +1829,7 @@ class _CardAccessor(object):
             else:
                 return False
 
-        for a, b in zip_longest(self, other):
-            if a != b:
-                return False
-        else:
-            return True
+        return all(a == b for a, b in zip_longest(self, other))
 
     def __ne__(self, other):
         return not (self == other)
@@ -1954,7 +1925,7 @@ class _HeaderCommentaryCards(_CardAccessor):
             n._indices = idx.indices(self._count)
             return n
         elif not isinstance(idx, int):
-            raise ValueError('%s index must be an integer' % self._keyword)
+            raise ValueError(f'{self._keyword} index must be an integer')
 
         idx = list(range(*self._indices))[idx]
         return self._header[(self._keyword, idx)]

@@ -108,8 +108,10 @@ class TestHeaderFunctions(PyfitsTestCase):
 
         c = fits.Card('floatnum', -467374636747637647347374734737437.)
 
-        if (str(c) != "FLOATNUM= -4.6737463674763E+32                                                  " and
-                str(c) != "FLOATNUM= -4.6737463674763E+032                                                 "):
+        if str(c) not in [
+            "FLOATNUM= -4.6737463674763E+32                                                  ",
+            "FLOATNUM= -4.6737463674763E+032                                                 ",
+        ]:
             assert str(c) == "FLOATNUM= -4.6737463674763E+32                                                  "
 
     def test_complex_value_card(self):
@@ -118,8 +120,10 @@ class TestHeaderFunctions(PyfitsTestCase):
         c = fits.Card('abc',
                       1.2345377437887837487e88 + 6324767364763746367e-33j)
 
-        if (str(c) != "ABC     = (1.23453774378878E+88, 6.32476736476374E-15)                          " and
-                str(c) != "ABC     = (1.2345377437887E+088, 6.3247673647637E-015)                          "):
+        if str(c) not in [
+            "ABC     = (1.23453774378878E+88, 6.32476736476374E-15)                          ",
+            "ABC     = (1.2345377437887E+088, 6.3247673647637E-015)                          ",
+        ]:
             assert str(c) == "ABC     = (1.23453774378878E+88, 6.32476736476374E-15)                          "
 
     def test_card_image_constructed_too_long(self):
@@ -1346,13 +1350,13 @@ class TestHeaderFunctions(PyfitsTestCase):
 
         assert len(header) == 7
         assert list(header.keys())[2] == 'FRED'
-        assert str(header.cards[3]) == 'HISTORY ' + longval[:72]
-        assert str(header.cards[4]).rstrip() == 'HISTORY ' + longval[72:]
+        assert str(header.cards[3]) == f'HISTORY {longval[:72]}'
+        assert str(header.cards[4]).rstrip() == f'HISTORY {longval[72:]}'
 
         header.set('HISTORY', longval, after='FOO')
         assert len(header) == 9
-        assert str(header.cards[1]) == 'HISTORY ' + longval[:72]
-        assert str(header.cards[2]).rstrip() == 'HISTORY ' + longval[72:]
+        assert str(header.cards[1]) == f'HISTORY {longval[:72]}'
+        assert str(header.cards[2]).rstrip() == f'HISTORY {longval[72:]}'
 
     def test_header_fromtextfile(self):
         """Regression test for https://aeon.stsci.edu/ssb/trac/pyfits/ticket/122
@@ -1813,7 +1817,7 @@ class TestHeaderFunctions(PyfitsTestCase):
             assert_raises(ValueError, h.set, 'TEST',
                           bytes('Hello', encoding='ascii'))
         elif six.PY2:
-            assert_raises(ValueError, h.set, 'TEST', str('ñ'))
+            assert_raises(ValueError, h.set, 'TEST', 'ñ')
 
     def test_header_strip_whitespace(self):
         """

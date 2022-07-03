@@ -112,7 +112,7 @@ class HeaderFormatter(object):
                     # The user can specify "EXTNAME" or "EXTNAME,EXTVER"
                     parts = ext.split(',')
                     if len(parts) > 1:
-                        extname = ','.join(parts[0:-1])
+                        extname = ','.join(parts[:-1])
                         extver = int(parts[-1])
                         hdukeys.append((extname, extver))
                     else:
@@ -131,12 +131,15 @@ class HeaderFormatter(object):
 
                 if idx > 0:  # Separate HDUs by a blank line
                     result.append('\n')
-                result.append('# HDU {hdu} in {filename}:\n'.format(
-                              filename=self.filename,
-                              hdu=hdu
-                              ))
-                result.append('{0}\n'.format('\n'.join([str(c)
-                                                        for c in cards])))
+                result.extend(
+                    (
+                        '# HDU {hdu} in {filename}:\n'.format(
+                            filename=self.filename, hdu=hdu
+                        ),
+                        '{0}\n'.format('\n'.join([str(c) for c in cards])),
+                    )
+                )
+
             except ExtensionNotFoundException:
                 pass
         return ''.join(result)

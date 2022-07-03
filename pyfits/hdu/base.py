@@ -832,15 +832,12 @@ class _NonstandardHDU(_BaseHDU, _Verify):
         # The SIMPLE keyword must be in the first card
         card = header.cards[0]
 
-        # The check that 'GROUPS' is missing is a bit redundant, since the
-        # match_header for GroupsHDU will always be called before this one.
-        if card.keyword == 'SIMPLE':
-            if 'GROUPS' not in header and card.value == False:
-                return True
-            else:
-                raise InvalidHDUException
-        else:
+        if card.keyword != 'SIMPLE':
             return False
+        if 'GROUPS' not in header and card.value == False:
+            return True
+        else:
+            raise InvalidHDUException
 
     @property
     def size(self):
@@ -870,12 +867,11 @@ class _NonstandardHDU(_BaseHDU, _Verify):
             except IOError:
                 offset = 0
 
-        if self.data is not None:
-            if not fileobj.simulateonly:
-                fileobj.write(self.data)
-                # flush, to make sure the content is written
-                fileobj.flush()
-                size = len(self.data)
+        if self.data is not None and not fileobj.simulateonly:
+            fileobj.write(self.data)
+            # flush, to make sure the content is written
+            fileobj.flush()
+            size = len(self.data)
 
         # return both the location and the size of the data area
         return offset, size
@@ -935,7 +931,7 @@ class _ValidHDU(_BaseHDU, _Verify):
         if naxis > 0:
             size = 1
             for idx in range(naxis):
-                size = size * self._header['NAXIS' + str(idx + 1)]
+                size = size * self._header[f'NAXIS{str(idx + 1)}']
             bitpix = self._header['BITPIX']
             gcount = self._header.get('GCOUNT', 1)
             pcount = self._header.get('PCOUNT', 0)
@@ -993,10 +989,7 @@ class _ValidHDU(_BaseHDU, _Verify):
         Make a copy of the HDU, both header and data are copied.
         """
 
-        if self.data is not None:
-            data = self.data.copy()
-        else:
-            data = None
+        data = self.data.copy() if self.data is not None else None
         return self.__class__(data=data, header=self._header.copy())
 
     @deprecated('3.2', alternative='the ``.name`` attribute or `Header.set`',
@@ -1312,7 +1305,7 @@ class _ValidHDU(_BaseHDU, _Verify):
         cs = self._calculate_datasum(blocking)
 
         if when is None:
-            when = 'data unit checksum updated %s' % self._get_timestamp()
+            when = f'data unit checksum updated {self._get_timestamp()}'
 
         self._header[datasum_keyword] = (str(cs), when)
         return cs
@@ -1356,16 +1349,14 @@ class _ValidHDU(_BaseHDU, _Verify):
         card with a consistent value.
         """
 
-        if not override_datasum:
-            # Calculate and add the data checksum to the header.
-            data_cs = self.add_datasum(when, blocking,
-                                       datasum_keyword=datasum_keyword)
-        else:
-            # Just calculate the data checksum
-            data_cs = self._calculate_datasum(blocking)
+        data_cs = (
+            self._calculate_datasum(blocking)
+            if override_datasum
+            else self.add_datasum(when, blocking, datasum_keyword=datasum_keyword)
+        )
 
         if when is None:
-            when = 'HDU checksum updated %s' % self._get_timestamp()
+            when = f'HDU checksum updated {self._get_timestamp()}'
 
         # Add the CHECKSUM card to the header with a value of all zeros.
         if datasum_keyword in self._header:
@@ -1395,18 +1386,17 @@ class _ValidHDU(_BaseHDU, _Verify):
            - 2 - no ``DATASUM`` keyword present
         """
 
-        if 'DATASUM' in self._header:
-            datasum = self._calculate_datasum(blocking)
-            if datasum == int(self._header['DATASUM']):
-                return 1
-            elif blocking == 'either':
-                # i.e. standard failed,  try nonstandard
-                return self.verify_datasum(blocking='nonstandard')
-            else:
-                # Failed with all permitted blocking kinds
-                return 0
-        else:
+        if 'DATASUM' not in self._header:
             return 2
+        datasum = self._calculate_datasum(blocking)
+        if datasum == int(self._header['DATASUM']):
+            return 1
+        elif blocking == 'either':
+            # i.e. standard failed,  try nonstandard
+            return self.verify_datasum(blocking='nonstandard')
+        else:
+            # Failed with all permitted blocking kinds
+            return 0
 
     def verify_checksum(self, blocking='standard'):
         """
@@ -1425,22 +1415,18 @@ class _ValidHDU(_BaseHDU, _Verify):
            - 2 - no ``CHECKSUM`` keyword present
         """
 
-        if 'CHECKSUM' in self._header:
-            if 'DATASUM' in self._header:
-                datasum = self._calculate_datasum(blocking)
-            else:
-                datasum = 0
-            checksum = self._calculate_checksum(datasum, blocking)
-            if checksum == self._header['CHECKSUM']:
-                return 1
-            elif blocking == 'either':
-                # i.e. standard failed,  try nonstandard
-                return self.verify_checksum(blocking='nonstandard')
-            else:
-                # Failed with all permitted blocking kinds
-                return 0
-        else:
+        if 'CHECKSUM' not in self._header:
             return 2
+        datasum = self._calculate_datasum(blocking) if 'DATASUM' in self._header else 0
+        checksum = self._calculate_checksum(datasum, blocking)
+        if checksum == self._header['CHECKSUM']:
+            return 1
+        elif blocking == 'either':
+            # i.e. standard failed,  try nonstandard
+            return self.verify_checksum(blocking='nonstandard')
+        else:
+            # Failed with all permitted blocking kinds
+            return 0
 
     def _verify_checksum_datasum(self, blocking):
         """
@@ -1490,21 +1476,15 @@ class _ValidHDU(_BaseHDU, _Verify):
         Calculate the value for the ``DATASUM`` card in the HDU.
         """
 
-        if not self._data_loaded:
-            # This is the case where the data has not been read from the file
-            # yet.  We find the data in the file, read it, and calculate the
-            # datasum.
-            if self.size > 0:
-                raw_data = self._get_raw_data(self._data_size, 'ubyte',
-                                              self._data_offset)
-                return self._compute_checksum(raw_data, blocking=blocking)
-            else:
-                return 0
-        elif self.data is not None:
+        if not self._data_loaded and self.size > 0:
+            raw_data = self._get_raw_data(self._data_size, 'ubyte',
+                                          self._data_offset)
+            return self._compute_checksum(raw_data, blocking=blocking)
+        elif not self._data_loaded or self.data is None:
+            return 0
+        else:
             return self._compute_checksum(self.data.view('ubyte'),
                                           blocking=blocking)
-        else:
-            return 0
 
     def _calculate_checksum(self, datasum, blocking,
                             checksum_keyword='CHECKSUM'):
@@ -1591,7 +1571,7 @@ class _ValidHDU(_BaseHDU, _Verify):
 
         hi = sum32 >> u16
         lo = sum32 & uFFFF
-        hi += np.add.reduce(data[0::2], dtype=np.uint64)
+        hi += np.add.reduce(data[::2], dtype=np.uint64)
         lo += np.add.reduce(data[1::2], dtype=np.uint64)
 
         if (data.nbytes // 2) % 2:

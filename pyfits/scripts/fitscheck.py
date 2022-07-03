@@ -191,10 +191,7 @@ def process_file(filename):
 
     try:
         checksum_errors = verify_checksums(filename)
-        if OPTIONS.compliance:
-            compliance_errors = verify_compliance(filename)
-        else:
-            compliance_errors = 0
+        compliance_errors = verify_compliance(filename) if OPTIONS.compliance else 0
         if OPTIONS.write_file and checksum_errors == 0 or OPTIONS.force:
             update(filename)
         return checksum_errors + compliance_errors
@@ -209,11 +206,9 @@ def main():
     or update FITS DATASUM and CHECKSUM keywords for the specified files.
     """
 
-    errors = 0
     fits_files = handle_options(sys.argv[1:])
     setup_logging()
-    for filename in fits_files:
-        errors += process_file(filename)
+    errors = sum(process_file(filename) for filename in fits_files)
     if errors:
         log.warn('%d errors' % errors)
     return int(bool(errors))
